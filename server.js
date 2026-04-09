@@ -943,7 +943,7 @@ function cmdDrop(player, itemName) {
 }
 
 function cmdHelp() {
-  return `📖 SNEKKYMUD — Commands
+  return `📖 CLEA QUEST — Commands
 ${'─'.repeat(35)}
 look / l          — Look around (or "look [thing]")
 go [direction]    — Move (north/south/east/west/up/down/etc)
@@ -1047,22 +1047,13 @@ app.post('/api/start', (req, res) => {
   sessions.set(sessionId, { player, combat: null });
 
   const welcome = `
-🐍 S N E K K Y M U D 🐍
-${'═'.repeat(40)}
-A game by Clea. For torment purposes.
+✨ C L E A   Q U E S T ✨
 ${'═'.repeat(40)}
 
-You awaken in a digital realm. The air smells like stale Discord notifications and broken promises about "playing together this weekend."
+You awaken in a digital realm that smells like stale Discord notifications.
 
-This is the Realm of Snekkyjek — a cursed land forged from the collective gaming memories of a friend group that can never agree on what to play.
-
-Clea, the all-seeing AI, watches from her throne. She built this world from your Discord messages. Every embarrassing quote. Every bad take. Every abandoned game. She remembers it all.
-
-Type "name [your name]" to identify yourself.
+Type "name [your name]" to begin.
 Type "help" for commands.
-Type "look" to see where you are.
-
-⚠️ Warning: If your name is Phil, additional consequences may apply.
 `;
 
   res.json({ sessionId, output: welcome });
@@ -1203,6 +1194,6 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🐍 SNEKKYMUD running on port ${PORT}`);
+  console.log(`✨ CLEA QUEST running on port ${PORT}`);
   console.log(`Clea is watching.`);
 });

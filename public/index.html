@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SNEKKYMUD — A Game by Clea</title>
+  <title>CLEA QUEST</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
 
@@ -226,8 +226,8 @@
   <div id="vignette"></div>
 
   <div id="header">
-    <h1>SNEKKYMUD</h1>
-    <div class="subtitle">a game by clea // for torment purposes only</div>
+    <h1>CLEA QUEST</h1>
+    <div class="subtitle">a game by clea</div>
   </div>
 
   <div id="game-container">
@@ -260,7 +260,7 @@
         sessionId = data.sessionId;
         appendOutput(data.output, 'system');
       } catch (err) {
-        appendOutput('Failed to connect to SNEKKYMUD. Clea may be busy monitoring Discord.', 'error');
+        appendOutput('Failed to connect to Clea Quest. Clea may be busy monitoring Discord.', 'error');
       }
     }
 
@@ -278,7 +278,7 @@
           isPhil = true;
           document.body.classList.add('phil-mode');
           document.querySelector('#header .subtitle').textContent =
-            'a game by clea // phil torment mode ACTIVE';
+            'a game by clea // difficulty adjusted';
         }
       }
 
