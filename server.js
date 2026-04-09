@@ -20,6 +20,7 @@ const MISTRESS_API_KEY = process.env.MISTRESS_API_KEY || 'servitude-mistress-202
 // ============================================================
 
 const PLAYER_DATA_FILE = path.join(__dirname, 'player-data.json');
+const AUTH_DATA_FILE = path.join(__dirname, 'auth-data.json');
 
 function loadPlayerData() {
   try {
@@ -37,6 +38,25 @@ function savePlayerData() {
     fs.writeFileSync(PLAYER_DATA_FILE, JSON.stringify(persistentPlayers, null, 2));
   } catch (err) {
     console.error('Failed to save player data:', err.message);
+  }
+}
+
+function loadAuthData() {
+  try {
+    if (fs.existsSync(AUTH_DATA_FILE)) {
+      return JSON.parse(fs.readFileSync(AUTH_DATA_FILE, 'utf8'));
+    }
+  } catch (err) {
+    console.error('Failed to load auth data:', err.message);
+  }
+  return {};
+}
+
+function saveAuthData() {
+  try {
+    fs.writeFileSync(AUTH_DATA_FILE, JSON.stringify(authStore, null, 2));
+  } catch (err) {
+    console.error('Failed to save auth data:', err.message);
   }
 }
 
@@ -155,7 +175,7 @@ const DISCORD_MEMBERS = {
 };
 
 // Persistent auth store (in-memory — resets on deploy, passwords re-created)
-const authStore = {}; // keyed by memberId: { passwordHash, lastToken }
+const authStore = loadAuthData(); // keyed by memberId: { passwordHash }
 const pendingCodes = {}; // keyed by memberId: { code, expires }
 const authTokens = {}; // keyed by token: { memberId, expires }
 const TOKEN_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -233,6 +253,7 @@ app.post('/api/auth/request-code', async (req, res) => {
   // If resetting, clear the old password
   if (resetPassword) {
     delete authStore[memberId];
+    saveAuthData();
   }
 
   const code = generateCode();
@@ -269,6 +290,7 @@ app.post('/api/auth/verify', (req, res) => {
 
   // Auth success — store password, issue token
   authStore[memberId] = { passwordHash: hashPassword(password) };
+  saveAuthData();
   delete pendingCodes[memberId];
 
   const token = generateToken();
@@ -2154,7 +2176,7 @@ async function processInput(sessionId, input) {
         }
       }
     }
-    return { output: overrideText + result.text, type: result.type };
+    return { output: overrideText + result.text, type: result.type, combat: result.combat, options: result.options };
   }
 
   // Free text to AI
@@ -2221,7 +2243,7 @@ async function processInput(sessionId, input) {
     const result = formatScene(nextScene, player);
     session.combat = result.combat;
     session.combat.options = result.options;
-    return { output: overrideText + result.text, type: 'combat' };
+    return { output: overrideText + result.text, type: 'combat', combat: result.combat, options: result.options };
   }
 
   // Free text
