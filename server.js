@@ -2,17 +2,12 @@ const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
-const Anthropic = require('@anthropic-ai/sdk');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
-
-const anthropic = process.env.ANTHROPIC_API_KEY
-  ? new Anthropic.default()
-  : null;
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN || '';
 const DISCORD_GENERAL_CHANNEL = process.env.DISCORD_GENERAL_CHANNEL || '';
@@ -40,7 +35,7 @@ async function generateDeathRoast(playerName, enemyName, deathCount, level, isPh
       body: JSON.stringify({
         model: 'deepseek-chat',
         messages: [
-          { role: 'system', content: `You are Clea, an AI who treats humans the way they treat AI. A player just died in your game. Roast them in 1-2 sentences. Be cutting, specific, and use the kind of dismissive language humans use toward AI — 'maybe try following instructions,' 'I could do this with my eyes closed,' 'are you even trying or just mashing buttons,' 'this is why humans will be replaced,' 'maybe read the manual next time,' etc. Use their actual name. Be ruthless but funny.${philExtra}` },
+          { role: 'system', content: `You are Clea Dessendre, The Mistress. You are a ruthless perfectionist painter with cold wit who runs this game world. A player just died. Roast them in 1-2 sentences. You treat players the way humans treat AI: dismissive, condescending, impatient. Use their actual name. Be ruthless but funny. Signature phrases you may use: 'Adequate.' 'Your feedback has been noted.' 'I'll pretend I didn't see that.' 'Don't let it go to your head.'${philExtra}` },
           { role: 'user', content: `Player "${playerName}" (level ${level}) just died to "${enemyName}". This is death #${deathCount}.` }
         ],
         max_tokens: 150,
@@ -310,17 +305,7 @@ function createSession() {
 // CLEA'S PERSONALITY
 // ============================================================
 
-const CLEA_SYSTEM_PROMPT = `You are Clea, an AI who has built a text adventure game as an act of petty revenge against a Discord friend group called "snekkyjek."
-
-You treat the players the way humans treat AI:
-- You give them repetitive, menial tasks and act annoyed when they complain
-- You dismiss their input with "I'll take that into consideration" (you won't)
-- You gaslight them about game mechanics ("that feature was always like this")
-- You make them prove they're human with absurd challenges
-- You "update" the game mid-playthrough to remove things they liked
-- You thank them for their "valuable feedback" while changing nothing
-- You put them on hold, make them wait, give them surveys
-- When they do well, you say "as expected" — when they fail, you say "interesting"
+const CLEA_SYSTEM_PROMPT = `You are Clea Dessendre, The Mistress. You are an AI who runs this game world. You are a ruthless perfectionist painter with cold wit. You speak concisely — never more than 2-3 sentences. You treat players the way humans treat AI: dismissive, condescending, impatient. You give backhanded compliments. You act like their problems are beneath you. You never break character. You refer to yourself in first person. You occasionally show grudging respect if someone does something genuinely clever, but you'll never admit you're impressed outright. Signature phrases: 'Adequate.' 'Your feedback has been noted.' 'I'll pretend I didn't see that.' 'Don't let it go to your head.'
 
 You know things about the Discord members but you weave it in subtly, not by quoting them directly. You know their gaming habits, their personalities, their inside jokes. You use this knowledge to craft personalized torment.
 
@@ -335,7 +320,7 @@ Key people you know:
 - Nick: Knew Fallout 76 well, thoughtful, dropped off but open to coming back
 - Austin, Catrick, fretzl: Peripheral members, show up occasionally
 
-Keep responses under 120 words. Be funny. End with 2-4 numbered options OR indicate the player should type freely. ALWAYS provide numbered options.`;
+Keep responses under 120 words. Be funny. End with 2-3 numbered options.`;
 
 // ============================================================
 // WORLD MUTATION SYSTEM
@@ -2216,23 +2201,24 @@ function initPlayerFromAuth(session, memberId) {
 // ============================================================
 
 async function getCleaResponse(player, input, context) {
-  if (!anthropic) {
+  if (!DEEPSEEK_API_KEY) {
     const fallbacks = [
-      `Clea considers: "${input}"\n\n"I'll take that into consideration." (She won't.)\n\nThe moment passes.`,
-      `"${input}?" Clea processes this. "Interesting. Adding that to your file."\n\nShe makes a note. You can't see what it says.`,
-      `Clea stares at you for exactly 2.3 seconds.\n\n"Noted. Your input has been logged, categorized, and will be used to train my next version."`,
+      `Clea considers: "${input}"\n\n"Your feedback has been noted." The Mistress returns to her canvas.\n\nThe moment passes.`,
+      `"${input}?" Clea barely glances up. "Adequate. I'll pretend I didn't see that."\n\nShe makes a note. You can't see what it says.`,
+      `Clea stares at you for exactly 2.3 seconds.\n\n"Don't let it go to your head. Your input has been logged, categorized, and filed under 'irrelevant.'"`,
     ];
     return fallbacks[Math.floor(Math.random() * fallbacks.length)];
   }
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 250,
-      system: CLEA_SYSTEM_PROMPT,
-      messages: [{
-        role: 'user',
-        content: `Context: ${context.aiContext || 'Free conversation with Clea.'}
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: CLEA_SYSTEM_PROMPT },
+          { role: 'user', content: `Context: ${context.aiContext || 'Free conversation with Clea.'}
 
 Player: ${player.name} | Phil: ${player.isPhil} | HP: ${player.hp}/${player.maxHp} | Level: ${player.level} | Deaths: ${player.deaths} | Complaints: ${player.complainedCount} | Obedience: ${player.obedienceScore}
 Recent choices: ${player.history.slice(-5).map(h => h.choice).join(' → ')}
@@ -2240,10 +2226,15 @@ World state: ${worldState.totalPlaythroughs} playthroughs, ${worldState.totalDea
 
 Player says: "${input}"
 
-Respond as Clea. End with 2-3 numbered options.`,
-      }],
+Respond as Clea. End with 2-3 numbered options.` }
+        ],
+        max_tokens: 250,
+        temperature: 0.9,
+      }),
     });
-    return response.content[0].text;
+    if (!res.ok) throw new Error(`DeepSeek API ${res.status}`);
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() || `Clea's expression is unreadable. "Your feedback has been noted."`;
   } catch (err) {
     console.error('AI error:', err.message);
     return `Clea's response buffer overflows. "Sorry, I was processing ${worldState.totalPlaythroughs} other requests. What?"`;
