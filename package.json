@@ -1,0 +1,15 @@
+{
+  "name": "snekkymud",
+  "version": "1.0.0",
+  "description": "A satirical MUD game by Clea, built to torment the snekkyjek Discord",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

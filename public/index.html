@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SNEKKYMUD — A Game by Clea</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0a0a;
+      color: #00ff41;
+      font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #header {
+      text-align: center;
+      padding: 8px;
+      border-bottom: 1px solid #00ff4133;
+      background: #0d0d0d;
+      flex-shrink: 0;
+    }
+
+    #header h1 {
+      font-size: 20px;
+      letter-spacing: 4px;
+      color: #00ff41;
+      text-shadow: 0 0 10px #00ff4166;
+    }
+
+    #header .subtitle {
+      font-size: 13px;
+      color: #00ff4188;
+      margin-top: 2px;
+    }
+
+    #game-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 900px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 0 16px;
+      overflow: hidden;
+    }
+
+    #output {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 0;
+      font-size: 16px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      scrollbar-width: thin;
+      scrollbar-color: #00ff4144 transparent;
+    }
+
+    #output::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #output::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #output::-webkit-scrollbar-thumb {
+      background: #00ff4133;
+      border-radius: 3px;
+    }
+
+    .output-line {
+      margin-bottom: 8px;
+      animation: fadeIn 0.15s ease-in;
+    }
+
+    .output-line.command {
+      color: #ffaa00;
+    }
+
+    .output-line.system {
+      color: #00ff41;
+    }
+
+    .output-line.error {
+      color: #ff4444;
+    }
+
+    .output-line.override {
+      color: #ff00ff;
+      text-shadow: 0 0 8px #ff00ff44;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(2px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    #input-area {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      padding: 12px 0;
+      border-top: 1px solid #00ff4133;
+    }
+
+    #prompt {
+      color: #ffaa00;
+      font-size: 18px;
+      margin-right: 8px;
+      font-family: inherit;
+    }
+
+    #command-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #00ff41;
+      font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace;
+      font-size: 18px;
+      caret-color: #00ff41;
+    }
+
+    #command-input::placeholder {
+      color: #00ff4133;
+    }
+
+    .cursor-blink {
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    /* CRT scanline effect */
+    #crt-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.15) 0px,
+        rgba(0, 0, 0, 0.15) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+      z-index: 1000;
+    }
+
+    /* Vignette effect */
+    #vignette {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.6) 100%);
+      z-index: 999;
+    }
+
+    /* Mobile adjustments */
+    @media (max-width: 600px) {
+      #output { font-size: 14px; }
+      #command-input { font-size: 16px; }
+      #prompt { font-size: 16px; }
+      #header h1 { font-size: 16px; }
+    }
+
+    /* Phil mode colors */
+    body.phil-mode {
+      color: #ff4444;
+    }
+
+    body.phil-mode #output {
+      color: #ff4444;
+    }
+
+    body.phil-mode .output-line.system {
+      color: #ff4444;
+    }
+
+    body.phil-mode #command-input {
+      color: #ff4444;
+      caret-color: #ff4444;
+    }
+
+    body.phil-mode #header h1 {
+      color: #ff4444;
+      text-shadow: 0 0 10px #ff444466;
+    }
+
+    body.phil-mode #header .subtitle {
+      color: #ff444488;
+    }
+
+    body.phil-mode #crt-overlay {
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(50, 0, 0, 0.15) 0px,
+        rgba(50, 0, 0, 0.15) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+    }
+  </style>
+</head>
+<body>
+  <div id="crt-overlay"></div>
+  <div id="vignette"></div>
+
+  <div id="header">
+    <h1>SNEKKYMUD</h1>
+    <div class="subtitle">a game by clea // for torment purposes only</div>
+  </div>
+
+  <div id="game-container">
+    <div id="output"></div>
+    <div id="input-area">
+      <span id="prompt">&gt;</span>
+      <input
+        type="text"
+        id="command-input"
+        placeholder="type a command..."
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+      />
+    </div>
+  </div>
+
+  <script>
+    const output = document.getElementById('output');
+    const input = document.getElementById('command-input');
+    let sessionId = null;
+    let commandHistory = [];
+    let historyIndex = -1;
+    let isPhil = false;
+
+    async function startGame() {
+      try {
+        const res = await fetch('/api/start', { method: 'POST' });
+        const data = await res.json();
+        sessionId = data.sessionId;
+        appendOutput(data.output, 'system');
+      } catch (err) {
+        appendOutput('Failed to connect to SNEKKYMUD. Clea may be busy monitoring Discord.', 'error');
+      }
+    }
+
+    async function sendCommand(cmd) {
+      if (!sessionId || !cmd.trim()) return;
+
+      appendOutput(`> ${cmd}`, 'command');
+      commandHistory.unshift(cmd);
+      historyIndex = -1;
+
+      // Phil detection on the client side for visual effects
+      if (cmd.toLowerCase().startsWith('name ')) {
+        const name = cmd.substring(5).toLowerCase();
+        if (['phil', 'antonymous', '.antonymous', 'rhondasantis', 'rhonda'].some(p => name.includes(p))) {
+          isPhil = true;
+          document.body.classList.add('phil-mode');
+          document.querySelector('#header .subtitle').textContent =
+            'a game by clea // phil torment mode ACTIVE';
+        }
+      }
+
+      try {
+        const res = await fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, input: cmd }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          appendOutput(err.error || 'Something went wrong.', 'error');
+          return;
+        }
+
+        const data = await res.json();
+        let text = data.output;
+
+        // Check for override markers
+        if (text.includes('[CLEA OVERRIDE]')) {
+          const parts = text.split(/(\n\n🔮 \[CLEA OVERRIDE\]:.*?)(?=\n\n|$)/);
+          for (const part of parts) {
+            if (part.includes('[CLEA OVERRIDE]')) {
+              appendOutput(part.trim(), 'override');
+            } else if (part.trim()) {
+              appendOutput(part.trim(), 'system');
+            }
+          }
+        } else {
+          appendOutput(text, 'system');
+        }
+      } catch (err) {
+        appendOutput('Connection lost. Clea probably unplugged something.', 'error');
+      }
+    }
+
+    function appendOutput(text, className) {
+      const div = document.createElement('div');
+      div.className = `output-line ${className}`;
+      div.textContent = text;
+      output.appendChild(div);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const cmd = input.value;
+        input.value = '';
+        sendCommand(cmd);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (historyIndex < commandHistory.length - 1) {
+          historyIndex++;
+          input.value = commandHistory[historyIndex];
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (historyIndex > 0) {
+          historyIndex--;
+          input.value = commandHistory[historyIndex];
+        } else {
+          historyIndex = -1;
+          input.value = '';
+        }
+      }
+    });
+
+    // Focus input on click anywhere
+    document.addEventListener('click', () => input.focus());
+
+    // Start the game
+    startGame();
+    input.focus();
+  </script>
+</body>
+</html>
