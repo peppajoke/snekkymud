@@ -125,6 +125,52 @@
 
     .nav-hint { color: #00ff4133; font-size: 12px; text-align: right; margin-bottom: 4px; }
 
+    /* Choice buttons */
+    #choice-buttons {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      padding: 10px 0 4px 0;
+    }
+    .choice-btn {
+      background: linear-gradient(180deg, #1a1a1a 0%, #0d0d0d 100%);
+      border: 1px solid #00ff4133;
+      color: #00ff41;
+      font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace;
+      font-size: 18px;
+      padding: 8px 16px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.15s ease;
+      text-shadow: 0 0 4px #00ff4122;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(0, 255, 65, 0.05);
+    }
+    .choice-btn:hover {
+      background: linear-gradient(180deg, #1f2a1f 0%, #0f1a0f 100%);
+      border-color: #00ff4188;
+      text-shadow: 0 0 8px #00ff4144;
+      box-shadow: 0 2px 12px rgba(0, 255, 65, 0.15), inset 0 1px 0 rgba(0, 255, 65, 0.1);
+      transform: translateY(-1px);
+    }
+    .choice-btn:active {
+      transform: translateY(1px);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(0, 255, 65, 0.05);
+    }
+    .choice-btn .choice-num {
+      color: #ffaa00;
+      margin-right: 6px;
+    }
+    body.phil-mode .choice-btn {
+      border-color: #ff444433;
+      color: #ff4444;
+      text-shadow: 0 0 4px #ff444422;
+    }
+    body.phil-mode .choice-btn:hover {
+      border-color: #ff444488;
+      background: linear-gradient(180deg, #2a1a1a 0%, #1a0f0f 100%);
+      text-shadow: 0 0 8px #ff444444;
+      box-shadow: 0 2px 12px rgba(255, 68, 68, 0.15), inset 0 1px 0 rgba(255, 68, 68, 0.1);
+    }
+    body.phil-mode .choice-btn .choice-num { color: #ff8844; }
+
     /* Phil mode */
     body.phil-mode { color: #ff4444; }
     body.phil-mode #output { color: #ff4444; }
@@ -174,6 +220,7 @@
   <!-- GAME SCREEN -->
   <div id="game-container" class="hidden">
     <div id="output"></div>
+    <div id="choice-buttons"></div>
     <div id="input-area">
       <span id="prompt">&gt;</span>
       <input type="text" id="command-input" placeholder="enter your choice..."
@@ -195,6 +242,7 @@
     let screenHistory = [];   // stack of previous screens
     let screenIndex = -1;     // -1 = current (live), 0+ = looking back
     let currentScreen = null; // the latest screen content
+    let currentOptions = null; // current choice options
 
     // ── AUTH FLOW ─────────────────────────────────────────
 
@@ -388,7 +436,9 @@
           document.querySelector('#header .subtitle').textContent = 'a game by clea // difficulty adjusted';
         }
 
+        currentOptions = data.options || null;
         showScreen([{ text: data.output, cls: 'system' }]);
+        renderChoiceButtons(currentOptions);
         input.focus();
       } catch (err) {
         showScreen([{ text: 'Failed to connect to Clea Quest.', cls: 'error' }]);
@@ -427,6 +477,7 @@
 
         const data = await res.json();
         let text = data.output;
+        currentOptions = data.options || null;
 
         const lines = [];
         lines.push({ text: `> ${cmd}`, cls: 'command' });
@@ -445,11 +496,14 @@
         }
 
         showScreen(lines);
+        renderChoiceButtons(currentOptions);
       } catch {
+        currentOptions = null;
         showScreen([
           { text: `> ${cmd}`, cls: 'command' },
           { text: 'Connection lost. Clea probably unplugged something.', cls: 'error' },
         ]);
+        renderChoiceButtons(null);
       }
     }
 
@@ -487,6 +541,23 @@
         output.appendChild(div);
       }
       output.scrollTop = 0;
+    }
+
+    function renderChoiceButtons(options) {
+      const container = document.getElementById('choice-buttons');
+      container.innerHTML = '';
+      if (!options || options.length === 0) return;
+      options.forEach((opt, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'choice-btn';
+        btn.innerHTML = `<span class="choice-num">${i + 1}.</span>${opt.text}`;
+        btn.addEventListener('click', () => {
+          sendCommand(String(i + 1));
+          input.value = '';
+          input.focus();
+        });
+        container.appendChild(btn);
+      });
     }
 
     function navigateBack() {
@@ -542,6 +613,7 @@
 
     document.addEventListener('click', (e) => {
       if (!authScreen.classList.contains('hidden')) return;
+      if (e.target.closest('.choice-btn')) return;
       input.focus();
     });
 
