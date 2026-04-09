@@ -26,8 +26,8 @@
       background: #0d0d0d;
       flex-shrink: 0;
     }
-    #header h1 { font-size: 20px; letter-spacing: 4px; color: #00ff41; text-shadow: 0 0 10px #00ff4166; }
-    #header .subtitle { font-size: 13px; color: #00ff4188; margin-top: 2px; }
+    #header h1 { font-size: 24px; letter-spacing: 4px; color: #00ff41; text-shadow: 0 0 10px #00ff4166; }
+    #header .subtitle { font-size: 15px; color: #00ff4188; margin-top: 2px; }
 
     #game-container {
       flex: 1; display: flex; flex-direction: column;
@@ -36,7 +36,7 @@
 
     #output {
       flex: 1; overflow-y: auto; padding: 16px 0;
-      font-size: 16px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word;
+      font-size: 20px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word;
       scrollbar-width: thin; scrollbar-color: #00ff4144 transparent;
     }
     #output::-webkit-scrollbar { width: 6px; }
@@ -55,11 +55,11 @@
       flex-shrink: 0; display: flex; align-items: center;
       padding: 12px 0; border-top: 1px solid #00ff4133;
     }
-    #prompt { color: #ffaa00; font-size: 18px; margin-right: 8px; font-family: inherit; }
+    #prompt { color: #ffaa00; font-size: 22px; margin-right: 8px; font-family: inherit; }
     #command-input {
       flex: 1; background: transparent; border: none; outline: none;
       color: #00ff41; font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace;
-      font-size: 18px; caret-color: #00ff41;
+      font-size: 22px; caret-color: #00ff41;
     }
     #command-input::placeholder { color: #00ff4133; }
 
@@ -76,9 +76,9 @@
 
     .character-list { width: 100%; max-width: 400px; }
     .character-btn {
-      display: block; width: 100%; padding: 10px 16px; margin: 4px 0;
+      display: block; width: 100%; padding: 12px 18px; margin: 4px 0;
       background: #00ff4110; border: 1px solid #00ff4133; color: #00ff41;
-      font-family: inherit; font-size: 16px; cursor: pointer; text-align: left;
+      font-family: inherit; font-size: 20px; cursor: pointer; text-align: left;
       transition: all 0.15s;
     }
     .character-btn:hover { background: #00ff4125; border-color: #00ff4166; }
@@ -87,9 +87,9 @@
     .auth-step { width: 100%; max-width: 400px; text-align: center; }
     .auth-step.hidden { display: none; }
     .auth-input {
-      width: 100%; padding: 10px; margin: 10px 0;
+      width: 100%; padding: 12px; margin: 10px 0;
       background: #00ff4110; border: 1px solid #00ff4133; color: #00ff41;
-      font-family: inherit; font-size: 18px; text-align: center; outline: none;
+      font-family: inherit; font-size: 22px; text-align: center; outline: none;
     }
     .auth-input:focus { border-color: #00ff4166; }
     .auth-input::placeholder { color: #00ff4133; }
@@ -117,9 +117,10 @@
     }
 
     @media (max-width: 600px) {
-      #output { font-size: 14px; }
-      #command-input { font-size: 16px; }
+      #output { font-size: 17px; }
+      #command-input { font-size: 18px; }
       .auth-title { font-size: 22px; }
+      .character-btn { font-size: 17px; }
     }
 
     .nav-hint { color: #00ff4133; font-size: 12px; text-align: right; margin-bottom: 4px; }
