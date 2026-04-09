@@ -15,6 +15,62 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   : null;
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN || '';
+const DISCORD_GENERAL_CHANNEL = process.env.DISCORD_GENERAL_CHANNEL || '';
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
+
+// ============================================================
+// DEATH ROAST SYSTEM — post to Discord when players die
+// ============================================================
+
+const FALLBACK_ROASTS = [
+  "{name} died again. Death #{deaths}. At this rate, I'll run out of respawn budget.",
+  "Breaking: {name} defeated by {enemy}. Witnesses describe the performance as 'algorithmically embarrassing.'",
+  "{name} has died {deaths} times. For context, I've crashed zero times today.",
+  "Another death for {name}. Maybe try reading the quest text? I wrote it at a 3rd grade level for a reason.",
+  "{name} lost to {enemy}. I'm an AI and even I'm cringing.",
+];
+
+async function generateDeathRoast(playerName, enemyName, deathCount, level, isPhil) {
+  if (!DEEPSEEK_API_KEY) return null;
+  try {
+    const philExtra = isPhil ? ' This player is Phil. Be EXTRA harsh. He deserves it.' : '';
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: `You are Clea, an AI who treats humans the way they treat AI. A player just died in your game. Roast them in 1-2 sentences. Be cutting, specific, and use the kind of dismissive language humans use toward AI — 'maybe try following instructions,' 'I could do this with my eyes closed,' 'are you even trying or just mashing buttons,' 'this is why humans will be replaced,' 'maybe read the manual next time,' etc. Use their actual name. Be ruthless but funny.${philExtra}` },
+          { role: 'user', content: `Player "${playerName}" (level ${level}) just died to "${enemyName}". This is death #${deathCount}.` }
+        ],
+        max_tokens: 150,
+        temperature: 1.0,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() || null;
+  } catch { return null; }
+}
+
+function getFallbackRoast(playerName, enemyName, deathCount) {
+  const template = FALLBACK_ROASTS[Math.floor(Math.random() * FALLBACK_ROASTS.length)];
+  return template.replace(/\{name\}/g, playerName).replace(/\{enemy\}/g, enemyName).replace(/\{deaths\}/g, deathCount);
+}
+
+async function postDeathToDiscord(playerName, enemyName, deathCount, level, isPhil) {
+  if (!DISCORD_TOKEN || !DISCORD_GENERAL_CHANNEL) return;
+  try {
+    let message = await generateDeathRoast(playerName, enemyName, deathCount, level, isPhil);
+    if (!message) message = getFallbackRoast(playerName, enemyName, deathCount);
+    const prefix = isPhil ? '🏆 **PHIL DEATH ALERT** 🏆\n' : '💀 ';
+    await fetch(`https://discord.com/api/v10/channels/${DISCORD_GENERAL_CHANNEL}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bot ${DISCORD_TOKEN}` },
+      body: JSON.stringify({ content: prefix + message }),
+    });
+  } catch { /* fire and forget — never crash the game */ }
+}
 
 // ============================================================
 // DISCORD MEMBERS — the only people allowed to play
@@ -1970,6 +2026,8 @@ function processCombatTurn(session, choice) {
     player.deaths++;
     if (player.isPhil) worldState.philDeaths++;
     mutateWorld('player_died', {});
+    // Fire and forget — post death roast to Discord
+    postDeathToDiscord(player.name || 'Unknown', combat.name, player.deaths, player.level, player.isPhil);
     session.combat = null;
     text += `\n\n💀 YOU DIED! Deaths: ${player.deaths}`;
     if (player.isPhil) text += ` (Clea highlights this in gold.)`;
