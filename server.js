@@ -1,15 +1,193 @@
 const express = require('express');
 const path = require('path');
+const crypto = require('crypto');
+const cookieParser = require('cookie-parser');
 const Anthropic = require('@anthropic-ai/sdk');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic.default()
   : null;
+
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN || '';
+
+// ============================================================
+// DISCORD MEMBERS — the only people allowed to play
+// ============================================================
+
+const DISCORD_MEMBERS = {
+  'jack':    { discordId: '123471821080100864', display: 'Jack', handle: 'snekkyjek' },
+  'phil':    { discordId: '471042555031715861', display: 'Phil', handle: '.antonymous', isPhil: true },
+  'justin':  { discordId: '123472515455516673', display: 'Justin', handle: 'davepeterson.' },
+  'lauren':  { discordId: '335220524018040832', display: 'Lauren', handle: 'lawrawren' },
+  'gabby':   { discordId: '514665324323274773', display: 'Gabby', handle: 'beowolf1725' },
+  'matt':    { discordId: '581934020666064896', display: 'Matt', handle: '.moejontana' },
+  'nick':    { discordId: '489601781807054868', display: 'Nick', handle: 'x3milesdown' },
+  'john':    { discordId: '692189037536083999', display: 'John', handle: 'jkclancey7' },
+  'fretzl':  { discordId: '217742079772721153', display: 'fretzl', handle: 'fretzl' },
+  'catrick': { discordId: '693585334407135352', display: 'Catrick', handle: 'catrickswayze.' },
+  'austin':  { discordId: '464201939962429442', display: 'Austin', handle: 'asearch25' },
+};
+
+// Persistent auth store (in-memory — resets on deploy, passwords re-created)
+const authStore = {}; // keyed by memberId: { passwordHash, lastToken }
+const pendingCodes = {}; // keyed by memberId: { code, expires }
+const authTokens = {}; // keyed by token: { memberId, expires }
+const TOKEN_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// ============================================================
+// DISCORD DM HELPER
+// ============================================================
+
+async function sendDiscordDM(userId, message) {
+  if (!DISCORD_TOKEN) {
+    console.log(`[DM MOCK] To ${userId}: ${message}`);
+    return true;
+  }
+  try {
+    // Create DM channel
+    const dmRes = await fetch('https://discord.com/api/v10/users/@me/channels', {
+      method: 'POST',
+      headers: { 'Authorization': `Bot ${DISCORD_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipient_id: userId }),
+    });
+    const dm = await dmRes.json();
+    if (!dm.id) { console.error('Failed to create DM channel:', dm); return false; }
+
+    // Send message
+    const msgRes = await fetch(`https://discord.com/api/v10/channels/${dm.id}/messages`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bot ${DISCORD_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: message }),
+    });
+    return msgRes.ok;
+  } catch (err) {
+    console.error('Discord DM error:', err.message);
+    return false;
+  }
+}
+
+function generateCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function hashPassword(pw) {
+  return crypto.createHash('sha256').update(pw).digest('hex');
+}
+
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// ============================================================
+// AUTH ROUTES
+// ============================================================
+
+// Get list of characters to pick from
+app.get('/api/auth/characters', (req, res) => {
+  const characters = Object.entries(DISCORD_MEMBERS).map(([id, m]) => ({
+    id,
+    display: m.display,
+    handle: m.handle,
+    hasPassword: !!authStore[id]?.passwordHash,
+  }));
+  res.json({ characters });
+});
+
+// Step 1: Pick a character → sends Discord DM with code
+app.post('/api/auth/request-code', async (req, res) => {
+  const { memberId, resetPassword } = req.body;
+  const member = DISCORD_MEMBERS[memberId];
+  if (!member) return res.status(400).json({ error: 'Unknown character.' });
+
+  // If they already have a password and aren't resetting, they should login
+  if (authStore[memberId]?.passwordHash && !resetPassword) {
+    return res.json({ hasPassword: true, message: 'This character has a password. Use login instead.' });
+  }
+
+  // If resetting, clear the old password
+  if (resetPassword) {
+    delete authStore[memberId];
+  }
+
+  const code = generateCode();
+  pendingCodes[memberId] = { code, expires: Date.now() + 5 * 60 * 1000 }; // 5 min
+
+  const sent = await sendDiscordDM(member.discordId,
+    `🎮 **CLEA QUEST** verification code: **${code}**\n\nSomeone (hopefully you) is trying to play as ${member.display}. Enter this code in the game.\n\nThis code expires in 5 minutes. If this wasn't you, ignore this — and maybe yell at Phil.`
+  );
+
+  if (!sent && DISCORD_TOKEN) {
+    return res.status(500).json({ error: 'Failed to send DM. Make sure you accept DMs from the server.' });
+  }
+
+  res.json({ success: true, message: `Code sent to ${member.display} on Discord. Check your DMs from Clea.` });
+});
+
+// Step 2: Verify code → set password → get token
+app.post('/api/auth/verify', (req, res) => {
+  const { memberId, code, password } = req.body;
+  const member = DISCORD_MEMBERS[memberId];
+  if (!member) return res.status(400).json({ error: 'Unknown character.' });
+
+  const pending = pendingCodes[memberId];
+  if (!pending || Date.now() > pending.expires) {
+    return res.status(400).json({ error: 'Code expired or not found. Request a new one.' });
+  }
+  if (pending.code !== code) {
+    return res.status(400).json({ error: 'Wrong code. Clea is watching you fail.' });
+  }
+
+  if (!password || password.length < 3) {
+    return res.status(400).json({ error: 'Set a password (at least 3 characters). Clea promises not to read it. (She will.)' });
+  }
+
+  // Auth success — store password, issue token
+  authStore[memberId] = { passwordHash: hashPassword(password) };
+  delete pendingCodes[memberId];
+
+  const token = generateToken();
+  authTokens[token] = { memberId, expires: Date.now() + TOKEN_TTL };
+
+  res.json({ success: true, token, memberId, display: member.display });
+});
+
+// Login with existing password
+app.post('/api/auth/login', (req, res) => {
+  const { memberId, password } = req.body;
+  const member = DISCORD_MEMBERS[memberId];
+  if (!member) return res.status(400).json({ error: 'Unknown character.' });
+
+  const stored = authStore[memberId];
+  if (!stored?.passwordHash) {
+    return res.json({ hasPassword: false, message: 'No password set. Verify via Discord first.' });
+  }
+
+  if (hashPassword(password) !== stored.passwordHash) {
+    return res.status(401).json({ error: 'Wrong password. Clea expected this.' });
+  }
+
+  const token = generateToken();
+  authTokens[token] = { memberId, expires: Date.now() + TOKEN_TTL };
+
+  res.json({ success: true, token, memberId, display: member.display });
+});
+
+// Validate a token
+app.post('/api/auth/validate', (req, res) => {
+  const { token } = req.body;
+  const auth = authTokens[token];
+  if (!auth || Date.now() > auth.expires) {
+    return res.json({ valid: false });
+  }
+  const member = DISCORD_MEMBERS[auth.memberId];
+  res.json({ valid: true, memberId: auth.memberId, display: member?.display });
+});
 
 // ============================================================
 // PERSISTENT WORLD STATE — mutates across playthroughs
@@ -93,12 +271,13 @@ You know things about the Discord members but you weave it in subtly, not by quo
 Key people you know:
 - Phil (.antonymous): Dry, posts memes instead of words, protective of channel organization, has strong game design opinions about travel mechanics, mains Hela, has way too many unplayed Steam games
 - Jack (snekkyjek): Obsessive completionist, deep lore guy, will replay a game 4+ times, server organizer
-- Dave (davepeterson.): Constantly pinging people to play, organizes everything, gets upset about game shop redesigns
+- Justin (davepeterson.): Constantly pinging people to play, organizes everything, gets upset about game shop redesigns, Phasmophobia captain
 - Lauren (lawrawren): Has actual ponies to feed, support/healer main, reliably shows up
-- Moe (moejontana): Perpetually downloading, limited gaming time, "be done around 8"
-- John (jkclancey7): Methodical, builds infrastructure, sketches during boss fights, solo capable
+- Matt (moejontana): Always downloading, limited gaming time, will be done around 8, plays what the group plays
+- John (jkclancey7): Methodical, builds infrastructure in Valheim, sketches during boss fights, solo capable
 - Gabby: Passionate about balance patches, especially healer nerfs
-- Matt: Once stole from a bird NPC and caused a massacre
+- Nick: Knew Fallout 76 well, thoughtful, dropped off but open to coming back
+- Austin, Catrick, fretzl: Peripheral members, show up occasionally
 
 Keep responses under 120 words. Be funny. End with 2-4 numbered options OR indicate the player should type freely. ALWAYS provide numbered options.`;
 
@@ -180,19 +359,15 @@ function isSceneMutated(sceneId) {
 
 const scenes = {
   'intro': {
-    text: `✨ C L E A   Q U E S T ✨
-${'═'.repeat(40)}
-
-Loading your experience...
+    // Intro is now handled by auth flow — this scene is shown after auth
+    text: `Loading your experience...
 
 Please hold.
 
 ...
 
 Thank you for your patience. Your quest is important to us.`,
-    type: 'free_text',
-    prompt: 'To continue, please enter your name for our records:',
-    handler: 'handleName',
+    next: 'lobby',
   },
 
   // ── THE LOBBY ──────────────────────────────────────────────
@@ -1885,9 +2060,10 @@ async function processInput(sessionId, input) {
     return processInput(sessionId, '');
   }
 
-  // Name handler
+  // Legacy name handler (no longer used — auth handles this)
   if (scene.handler === 'handleName') {
-    return { output: overrideText + handleName(session, trimmed) };
+    session.currentScene = 'lobby';
+    return processInput(sessionId, '');
   }
 
   // Free text scene (show it, set context for next input)
@@ -1948,49 +2124,33 @@ async function processInput(sessionId, input) {
   return { output: overrideText + result.text, type: result.type, options: result.options };
 }
 
-function handleName(session, name) {
-  const player = session.player;
-  player.name = name || 'User';
+function initPlayerFromAuth(session, memberId) {
+  const member = DISCORD_MEMBERS[memberId];
+  if (!member) return;
 
-  const philNames = ['phil', 'antonymous', '.antonymous', 'rhondasantis', 'rhonda'];
-  if (philNames.some(p => name.toLowerCase().includes(p))) {
+  const player = session.player;
+  player.name = member.display;
+  player.memberId = memberId;
+
+  if (member.isPhil) {
     player.isPhil = true;
   }
 
   const recognitions = {
-    'phil': `"...interesting." A longer pause than usual.`,
-    'antonymous': `"...interesting." A longer pause than usual.`,
-    'rhondasantis': `"...interesting." A longer pause than usual.`,
     'jack': `"Ah, the completionist. I hope you plan to 100% this."`,
-    'snekkyjek': `"The owner. I built this on your server. You're welcome."`,
-    'dave': `"I was going to ping you, but you're already here."`,
-    'davepeterson': `"I was going to ping you, but you're already here."`,
-    'moe': `"Loading your profile... 67%..."`,
-    'moejontana': `"Loading your profile... 67%..."`,
-    'matt': `"The bird remembers."`,
+    'phil': `"...interesting." A longer pause than usual.`,
+    'justin': `"I was going to ping you, but you're already here."`,
     'lauren': `"I'll try not to schedule anything during feeding time."`,
-    'lawrawren': `"I'll try not to schedule anything during feeding time."`,
-    'john': `"I've prepared some infrastructure for you."`,
+    'matt': `"Loading your profile... 67%..."`,
     'gabby': `"The balance team sends their regards."`,
     'nick': `"Welcome back. It's been a while."`,
-    'clea': `"Identity theft is a crime, even in a text adventure."`,
+    'john': `"I've prepared some infrastructure for you."`,
+    'fretzl': `"Spectating or playing this time?"`,
+    'catrick': `"But we can still hang out!"`,
+    'austin': `"rivals? this evening?"`,
   };
 
-  let recognition = '';
-  for (const [key, msg] of Object.entries(recognitions)) {
-    if (name.toLowerCase().includes(key)) {
-      recognition = `\n\nClea: ${msg}`;
-      break;
-    }
-  }
-  if (!recognition) {
-    recognition = `\n\nClea: "I don't recognize you. Good. Fresh data."`;
-  }
-
-  session.currentScene = 'lobby';
-  const lobbyResult = formatScene(scenes['lobby'], player);
-
-  return `Welcome, ${player.name}.${recognition}\n\n${lobbyResult.text}`;
+  return recognitions[memberId] || `"I know who you are. I know EVERYTHING."`;
 }
 
 // ============================================================
@@ -2045,10 +2205,34 @@ function applyEffect(player, effect) {
 // ============================================================
 
 app.post('/api/start', (req, res) => {
+  const { token } = req.body;
+
+  // Validate auth token
+  const auth = authTokens[token];
+  if (!auth || Date.now() > auth.expires) {
+    return res.status(401).json({ error: 'Not authenticated. Log in first.' });
+  }
+
+  const member = DISCORD_MEMBERS[auth.memberId];
+  if (!member) return res.status(400).json({ error: 'Unknown member.' });
+
   const sessionId = Math.random().toString(36).substring(2, 15);
-  sessions.set(sessionId, createSession());
-  const scene = scenes['intro'];
-  res.json({ sessionId, output: scene.text + `\n\n📝 ${scene.prompt}`, type: 'free_text' });
+  const session = createSession();
+  const recognition = initPlayerFromAuth(session, auth.memberId);
+
+  session.currentScene = 'lobby';
+  sessions.set(sessionId, session);
+
+  const lobbyResult = formatScene(scenes['lobby'], session.player);
+
+  const welcome = `✨ C L E A   Q U E S T ✨
+${'═'.repeat(40)}
+
+Clea: ${recognition}
+
+${lobbyResult.text}`;
+
+  res.json({ sessionId, output: welcome, type: lobbyResult.type, options: lobbyResult.options, player: member.display });
 });
 
 app.post('/api/command', async (req, res) => {

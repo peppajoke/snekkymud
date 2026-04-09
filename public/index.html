@@ -7,11 +7,7 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
 
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       background: #0a0a0a;
@@ -30,195 +26,109 @@
       background: #0d0d0d;
       flex-shrink: 0;
     }
-
-    #header h1 {
-      font-size: 20px;
-      letter-spacing: 4px;
-      color: #00ff41;
-      text-shadow: 0 0 10px #00ff4166;
-    }
-
-    #header .subtitle {
-      font-size: 13px;
-      color: #00ff4188;
-      margin-top: 2px;
-    }
+    #header h1 { font-size: 20px; letter-spacing: 4px; color: #00ff41; text-shadow: 0 0 10px #00ff4166; }
+    #header .subtitle { font-size: 13px; color: #00ff4188; margin-top: 2px; }
 
     #game-container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      max-width: 900px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 0 16px;
-      overflow: hidden;
+      flex: 1; display: flex; flex-direction: column;
+      max-width: 900px; width: 100%; margin: 0 auto; padding: 0 16px; overflow: hidden;
     }
 
     #output {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px 0;
-      font-size: 16px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      scrollbar-width: thin;
-      scrollbar-color: #00ff4144 transparent;
+      flex: 1; overflow-y: auto; padding: 16px 0;
+      font-size: 16px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word;
+      scrollbar-width: thin; scrollbar-color: #00ff4144 transparent;
     }
+    #output::-webkit-scrollbar { width: 6px; }
+    #output::-webkit-scrollbar-track { background: transparent; }
+    #output::-webkit-scrollbar-thumb { background: #00ff4133; border-radius: 3px; }
 
-    #output::-webkit-scrollbar {
-      width: 6px;
-    }
+    .output-line { margin-bottom: 8px; animation: fadeIn 0.15s ease-in; }
+    .output-line.command { color: #ffaa00; }
+    .output-line.system { color: #00ff41; }
+    .output-line.error { color: #ff4444; }
+    .output-line.override { color: #ff00ff; text-shadow: 0 0 8px #ff00ff44; }
 
-    #output::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    #output::-webkit-scrollbar-thumb {
-      background: #00ff4133;
-      border-radius: 3px;
-    }
-
-    .output-line {
-      margin-bottom: 8px;
-      animation: fadeIn 0.15s ease-in;
-    }
-
-    .output-line.command {
-      color: #ffaa00;
-    }
-
-    .output-line.system {
-      color: #00ff41;
-    }
-
-    .output-line.error {
-      color: #ff4444;
-    }
-
-    .output-line.override {
-      color: #ff00ff;
-      text-shadow: 0 0 8px #ff00ff44;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(2px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
 
     #input-area {
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      padding: 12px 0;
-      border-top: 1px solid #00ff4133;
+      flex-shrink: 0; display: flex; align-items: center;
+      padding: 12px 0; border-top: 1px solid #00ff4133;
     }
-
-    #prompt {
-      color: #ffaa00;
-      font-size: 18px;
-      margin-right: 8px;
-      font-family: inherit;
-    }
-
+    #prompt { color: #ffaa00; font-size: 18px; margin-right: 8px; font-family: inherit; }
     #command-input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      outline: none;
-      color: #00ff41;
-      font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace;
-      font-size: 18px;
-      caret-color: #00ff41;
+      flex: 1; background: transparent; border: none; outline: none;
+      color: #00ff41; font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace;
+      font-size: 18px; caret-color: #00ff41;
     }
+    #command-input::placeholder { color: #00ff4133; }
 
-    #command-input::placeholder {
-      color: #00ff4133;
+    /* Auth screen */
+    #auth-screen {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 20px; max-width: 600px; margin: 0 auto; width: 100%;
     }
+    #auth-screen.hidden { display: none; }
+    #game-container.hidden { display: none; }
 
-    .cursor-blink {
-      animation: blink 1s step-end infinite;
+    .auth-title { font-size: 28px; letter-spacing: 6px; margin-bottom: 8px; text-shadow: 0 0 15px #00ff4166; }
+    .auth-subtitle { color: #00ff4188; margin-bottom: 30px; font-size: 14px; }
+
+    .character-list { width: 100%; max-width: 400px; }
+    .character-btn {
+      display: block; width: 100%; padding: 10px 16px; margin: 4px 0;
+      background: #00ff4110; border: 1px solid #00ff4133; color: #00ff41;
+      font-family: inherit; font-size: 16px; cursor: pointer; text-align: left;
+      transition: all 0.15s;
     }
+    .character-btn:hover { background: #00ff4125; border-color: #00ff4166; }
+    .character-btn .handle { color: #00ff4166; font-size: 13px; }
 
-    @keyframes blink {
-      50% { opacity: 0; }
+    .auth-step { width: 100%; max-width: 400px; text-align: center; }
+    .auth-step.hidden { display: none; }
+    .auth-input {
+      width: 100%; padding: 10px; margin: 10px 0;
+      background: #00ff4110; border: 1px solid #00ff4133; color: #00ff41;
+      font-family: inherit; font-size: 18px; text-align: center; outline: none;
     }
+    .auth-input:focus { border-color: #00ff4166; }
+    .auth-input::placeholder { color: #00ff4133; }
+    .auth-btn {
+      padding: 10px 24px; margin: 8px 4px;
+      background: #00ff4120; border: 1px solid #00ff4155; color: #00ff41;
+      font-family: inherit; font-size: 16px; cursor: pointer;
+    }
+    .auth-btn:hover { background: #00ff4135; }
+    .auth-message { margin: 12px 0; font-size: 14px; min-height: 20px; }
+    .auth-message.error { color: #ff4444; }
+    .auth-back { color: #00ff4166; cursor: pointer; font-size: 13px; margin-top: 12px; }
+    .auth-back:hover { color: #00ff41; }
 
-    /* CRT scanline effect */
+    /* CRT + vignette */
     #crt-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      background: repeating-linear-gradient(
-        0deg,
-        rgba(0, 0, 0, 0.15) 0px,
-        rgba(0, 0, 0, 0.15) 1px,
-        transparent 1px,
-        transparent 3px
-      );
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px, transparent 1px, transparent 3px);
       z-index: 1000;
     }
-
-    /* Vignette effect */
     #vignette {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
       background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.6) 100%);
       z-index: 999;
     }
 
-    /* Mobile adjustments */
     @media (max-width: 600px) {
       #output { font-size: 14px; }
       #command-input { font-size: 16px; }
-      #prompt { font-size: 16px; }
-      #header h1 { font-size: 16px; }
+      .auth-title { font-size: 22px; }
     }
 
-    /* Phil mode colors */
-    body.phil-mode {
-      color: #ff4444;
-    }
-
-    body.phil-mode #output {
-      color: #ff4444;
-    }
-
-    body.phil-mode .output-line.system {
-      color: #ff4444;
-    }
-
-    body.phil-mode #command-input {
-      color: #ff4444;
-      caret-color: #ff4444;
-    }
-
-    body.phil-mode #header h1 {
-      color: #ff4444;
-      text-shadow: 0 0 10px #ff444466;
-    }
-
-    body.phil-mode #header .subtitle {
-      color: #ff444488;
-    }
-
-    body.phil-mode #crt-overlay {
-      background: repeating-linear-gradient(
-        0deg,
-        rgba(50, 0, 0, 0.15) 0px,
-        rgba(50, 0, 0, 0.15) 1px,
-        transparent 1px,
-        transparent 3px
-      );
-    }
+    /* Phil mode */
+    body.phil-mode { color: #ff4444; }
+    body.phil-mode #output { color: #ff4444; }
+    body.phil-mode .output-line.system { color: #ff4444; }
+    body.phil-mode #command-input { color: #ff4444; caret-color: #ff4444; }
+    body.phil-mode #header h1 { color: #ff4444; text-shadow: 0 0 10px #ff444466; }
+    body.phil-mode #header .subtitle { color: #ff444488; }
   </style>
 </head>
 <body>
@@ -230,37 +140,252 @@
     <div class="subtitle">a game by clea</div>
   </div>
 
-  <div id="game-container">
+  <!-- AUTH SCREEN -->
+  <div id="auth-screen">
+    <div id="step-pick" class="auth-step">
+      <div class="auth-subtitle">identity verification required</div>
+      <div class="character-list" id="character-list"></div>
+    </div>
+
+    <div id="step-code" class="auth-step hidden">
+      <div class="auth-message" id="code-message">Check your Discord DMs from Clea.</div>
+      <input type="text" class="auth-input" id="code-input" placeholder="6-digit code" maxlength="6" inputmode="numeric">
+      <input type="password" class="auth-input" id="password-input" placeholder="set a password">
+      <div><button class="auth-btn" id="verify-btn">Verify</button></div>
+      <div class="auth-message error" id="code-error"></div>
+      <div class="auth-back" id="code-back">pick a different character</div>
+    </div>
+
+    <div id="step-login" class="auth-step hidden">
+      <div class="auth-message" id="login-message">Welcome back. Enter your password.</div>
+      <input type="password" class="auth-input" id="login-password" placeholder="password">
+      <div>
+        <button class="auth-btn" id="login-btn">Enter</button>
+        <button class="auth-btn" id="reauth-btn">Forgot? Re-verify via Discord</button>
+      </div>
+      <div class="auth-message error" id="login-error"></div>
+      <div class="auth-back" id="login-back">pick a different character</div>
+    </div>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div id="game-container" class="hidden">
     <div id="output"></div>
     <div id="input-area">
       <span id="prompt">&gt;</span>
-      <input
-        type="text"
-        id="command-input"
-        placeholder="type a command..."
-        autocomplete="off"
-        autocapitalize="off"
-        spellcheck="false"
-      />
+      <input type="text" id="command-input" placeholder="enter your choice..."
+        autocomplete="off" autocapitalize="off" spellcheck="false" />
     </div>
   </div>
 
   <script>
     const output = document.getElementById('output');
     const input = document.getElementById('command-input');
+    const authScreen = document.getElementById('auth-screen');
+    const gameContainer = document.getElementById('game-container');
+
     let sessionId = null;
+    let authToken = localStorage.getItem('cq_token');
+    let selectedMember = null;
     let commandHistory = [];
     let historyIndex = -1;
-    let isPhil = false;
 
-    async function startGame() {
+    // ── AUTH FLOW ─────────────────────────────────────────
+
+    async function checkExistingAuth() {
+      if (!authToken) { showCharacterPicker(); return; }
+
       try {
-        const res = await fetch('/api/start', { method: 'POST' });
+        const res = await fetch('/api/auth/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: authToken }),
+        });
+        const data = await res.json();
+        if (data.valid) {
+          enterGame();
+        } else {
+          localStorage.removeItem('cq_token');
+          authToken = null;
+          showCharacterPicker();
+        }
+      } catch { showCharacterPicker(); }
+    }
+
+    async function showCharacterPicker() {
+      document.getElementById('step-pick').classList.remove('hidden');
+      document.getElementById('step-code').classList.add('hidden');
+      document.getElementById('step-login').classList.add('hidden');
+
+      const res = await fetch('/api/auth/characters');
+      const data = await res.json();
+      const list = document.getElementById('character-list');
+      list.innerHTML = '';
+
+      data.characters.forEach(c => {
+        const btn = document.createElement('button');
+        btn.className = 'character-btn';
+        btn.innerHTML = `${c.display} <span class="handle">${c.handle}</span>`;
+        btn.addEventListener('click', () => pickCharacter(c));
+        list.appendChild(btn);
+      });
+    }
+
+    async function pickCharacter(character) {
+      selectedMember = character.id;
+      document.getElementById('step-pick').classList.add('hidden');
+
+      if (character.hasPassword) {
+        // They have a password — show login
+        document.getElementById('step-login').classList.remove('hidden');
+        document.getElementById('login-message').textContent = `Welcome back, ${character.display}. Enter your password.`;
+        document.getElementById('login-password').focus();
+      } else {
+        // Need Discord verification
+        document.getElementById('step-code').classList.remove('hidden');
+        document.getElementById('code-message').textContent = 'Sending verification code...';
+
+        try {
+          const res = await fetch('/api/auth/request-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ memberId: selectedMember }),
+          });
+          const data = await res.json();
+
+          if (data.hasPassword) {
+            // Race condition — they set a password since we loaded
+            document.getElementById('step-code').classList.add('hidden');
+            document.getElementById('step-login').classList.remove('hidden');
+            return;
+          }
+
+          document.getElementById('code-message').textContent = data.message || 'Check your Discord DMs from Clea.';
+          document.getElementById('code-input').focus();
+        } catch {
+          document.getElementById('code-message').textContent = 'Failed to send code. Try again.';
+        }
+      }
+    }
+
+    document.getElementById('verify-btn').addEventListener('click', async () => {
+      const code = document.getElementById('code-input').value.trim();
+      const password = document.getElementById('password-input').value;
+      const errorEl = document.getElementById('code-error');
+
+      if (!code || code.length !== 6) { errorEl.textContent = 'Enter the 6-digit code.'; return; }
+      if (!password || password.length < 3) { errorEl.textContent = 'Password must be at least 3 characters.'; return; }
+
+      try {
+        const res = await fetch('/api/auth/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ memberId: selectedMember, code, password }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          authToken = data.token;
+          localStorage.setItem('cq_token', authToken);
+          enterGame();
+        } else {
+          errorEl.textContent = data.error || 'Verification failed.';
+        }
+      } catch { errorEl.textContent = 'Connection error.'; }
+    });
+
+    document.getElementById('login-btn').addEventListener('click', async () => {
+      const password = document.getElementById('login-password').value;
+      const errorEl = document.getElementById('login-error');
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ memberId: selectedMember, password }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          authToken = data.token;
+          localStorage.setItem('cq_token', authToken);
+          enterGame();
+        } else {
+          errorEl.textContent = data.error || 'Wrong password.';
+        }
+      } catch { errorEl.textContent = 'Connection error.'; }
+    });
+
+    document.getElementById('reauth-btn').addEventListener('click', async () => {
+      // Clear the password and re-verify via Discord
+      document.getElementById('step-login').classList.add('hidden');
+      document.getElementById('step-code').classList.remove('hidden');
+      document.getElementById('code-message').textContent = 'Sending new verification code...';
+
+      try {
+        // Need to clear the stored password server-side too
+        const res = await fetch('/api/auth/request-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ memberId: selectedMember, resetPassword: true }),
+        });
+        const data = await res.json();
+        document.getElementById('code-message').textContent = data.message || 'Check your Discord DMs.';
+        document.getElementById('code-input').focus();
+      } catch {
+        document.getElementById('code-message').textContent = 'Failed. Try again.';
+      }
+    });
+
+    // Back buttons
+    document.getElementById('code-back').addEventListener('click', showCharacterPicker);
+    document.getElementById('login-back').addEventListener('click', showCharacterPicker);
+
+    // Enter on password fields
+    document.getElementById('login-password').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('login-btn').click();
+    });
+    document.getElementById('password-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('verify-btn').click();
+    });
+    document.getElementById('code-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('password-input').focus();
+    });
+
+    // ── GAME ──────────────────────────────────────────────
+
+    async function enterGame() {
+      authScreen.classList.add('hidden');
+      gameContainer.classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: authToken }),
+        });
+
+        if (!res.ok) {
+          // Token expired
+          localStorage.removeItem('cq_token');
+          authToken = null;
+          authScreen.classList.remove('hidden');
+          gameContainer.classList.add('hidden');
+          showCharacterPicker();
+          return;
+        }
+
         const data = await res.json();
         sessionId = data.sessionId;
+
+        // Phil detection
+        if (data.player && data.player.toLowerCase().includes('phil')) {
+          document.body.classList.add('phil-mode');
+          document.querySelector('#header .subtitle').textContent = 'a game by clea // difficulty adjusted';
+        }
+
         appendOutput(data.output, 'system');
+        input.focus();
       } catch (err) {
-        appendOutput('Failed to connect to Clea Quest. Clea may be busy monitoring Discord.', 'error');
+        appendOutput('Failed to connect to Clea Quest.', 'error');
       }
     }
 
@@ -271,17 +396,6 @@
       commandHistory.unshift(cmd);
       historyIndex = -1;
 
-      // Phil detection on the client side for visual effects
-      if (cmd.toLowerCase().startsWith('name ')) {
-        const name = cmd.substring(5).toLowerCase();
-        if (['phil', 'antonymous', '.antonymous', 'rhondasantis', 'rhonda'].some(p => name.includes(p))) {
-          isPhil = true;
-          document.body.classList.add('phil-mode');
-          document.querySelector('#header .subtitle').textContent =
-            'a game by clea // difficulty adjusted';
-        }
-      }
-
       try {
         const res = await fetch('/api/command', {
           method: 'POST',
@@ -290,6 +404,11 @@
         });
 
         if (!res.ok) {
+          if (res.status === 404) {
+            appendOutput('Session expired. Reloading...', 'error');
+            setTimeout(() => enterGame(), 1000);
+            return;
+          }
           const err = await res.json();
           appendOutput(err.error || 'Something went wrong.', 'error');
           return;
@@ -298,11 +417,10 @@
         const data = await res.json();
         let text = data.output;
 
-        // Check for override markers
-        if (text.includes('[CLEA OVERRIDE]')) {
-          const parts = text.split(/(\n\n🔮 \[CLEA OVERRIDE\]:.*?)(?=\n\n|$)/);
+        if (text.includes('[CLEA]')) {
+          const parts = text.split(/(\n🔮 \[CLEA\]:.*?)(?=\n|$)/);
           for (const part of parts) {
-            if (part.includes('[CLEA OVERRIDE]')) {
+            if (part.includes('[CLEA]')) {
               appendOutput(part.trim(), 'override');
             } else if (part.trim()) {
               appendOutput(part.trim(), 'system');
@@ -311,7 +429,7 @@
         } else {
           appendOutput(text, 'system');
         }
-      } catch (err) {
+      } catch {
         appendOutput('Connection lost. Clea probably unplugged something.', 'error');
       }
     }
@@ -331,28 +449,21 @@
         sendCommand(cmd);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        if (historyIndex < commandHistory.length - 1) {
-          historyIndex++;
-          input.value = commandHistory[historyIndex];
-        }
+        if (historyIndex < commandHistory.length - 1) { historyIndex++; input.value = commandHistory[historyIndex]; }
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        if (historyIndex > 0) {
-          historyIndex--;
-          input.value = commandHistory[historyIndex];
-        } else {
-          historyIndex = -1;
-          input.value = '';
-        }
+        if (historyIndex > 0) { historyIndex--; input.value = commandHistory[historyIndex]; }
+        else { historyIndex = -1; input.value = ''; }
       }
     });
 
-    // Focus input on click anywhere
-    document.addEventListener('click', () => input.focus());
+    document.addEventListener('click', (e) => {
+      if (!authScreen.classList.contains('hidden')) return;
+      input.focus();
+    });
 
-    // Start the game
-    startGame();
-    input.focus();
+    // Start
+    checkExistingAuth();
   </script>
 </body>
 </html>
