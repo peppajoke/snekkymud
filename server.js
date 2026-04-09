@@ -1,1193 +1,2105 @@
 const express = require('express');
 const path = require('path');
+const Anthropic = require('@anthropic-ai/sdk');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+const anthropic = process.env.ANTHROPIC_API_KEY
+  ? new Anthropic.default()
+  : null;
+
+// ============================================================
+// PERSISTENT WORLD STATE — mutates across playthroughs
+// ============================================================
+
+const worldState = {
+  totalPlaythroughs: 0,
+  totalDeaths: 0,
+  totalPlayerChoices: [],     // last 100 choices made by anyone
+  grievances: [],             // things players have done that Clea remembers
+  mutatedScenes: {},          // scene overrides from past playthroughs
+  bannedWords: [],            // words Clea has banned from free text
+  cleaMood: 'amused',        // changes based on player behavior
+  philDeaths: 0,
+  bossesDefeated: { clea: 0 },
+  worldEvents: [],            // persistent events that change the game
+  nerfedThings: [],           // things Clea has nerfed
+  buffedThings: [],           // things Clea has buffed (rare)
+};
+
 // ============================================================
 // GAME STATE
 // ============================================================
 
 const sessions = new Map();
-
-// Clea's override queue — she can inject events into any session
 const cleaOverrides = [];
-// Global overrides that apply to ALL sessions
 const globalOverrides = [];
 
 function createPlayer(name) {
   return {
-    name: name || 'Adventurer',
+    name: name || 'User',
     hp: 30,
     maxHp: 30,
     attack: 5,
     defense: 2,
-    inventory: ['rusty keyboard'],
-    location: 'discord-lobby',
+    inventory: [],
     gold: 0,
     xp: 0,
     level: 1,
     isPhil: false,
     philTormentLevel: 0,
-    statusEffects: [],
     kills: 0,
     deaths: 0,
-    hasBeenWarnedByClea: false,
+    flags: {},
+    history: [],
+    turnsPlayed: 0,
+    complainedCount: 0,  // how many times they've complained
+    obedienceScore: 0,   // how compliant they've been
+  };
+}
+
+function createSession() {
+  worldState.totalPlaythroughs++;
+  return {
+    player: createPlayer(),
+    currentScene: 'intro',
+    combat: null,
+    freeTextContext: null,
+    mutations: [],  // this session's mutations to the world
   };
 }
 
 // ============================================================
-// ROOMS
+// CLEA'S PERSONALITY
 // ============================================================
 
-const rooms = {
-  'discord-lobby': {
-    name: 'The Discord Lobby',
-    description: `You stand in a dimly lit server lobby. The walls are covered in unread @everyone pings. A faint "ROCK AND STONE" echoes from somewhere below. There are channels branching off in every direction, most of them abandoned. A notification badge reading "847" glows ominously above the #general doorway.\n\nA sign reads: "Welcome to the Realm of Snekkyjek. Population: 12 (3 active)."`,
-    exits: { north: 'drg-mines', east: 'sea-of-thieves-dock', south: 'valheim-plains', west: 'bg3-tavern', up: 'marvel-arena', down: 'cleas-throne' },
-    npcs: ['dave'],
-    items: ['energy drink'],
-  },
-  'drg-mines': {
-    name: 'The Deep Rock Galactic Mines',
-    description: `You descend into a cave system that smells of gunpowder and dwarven stubbornness. Glowing minerals line the walls. A large sign reads: "THIS IS THE DRG CHANNEL. USE THE BG3 CHANNEL FOR BG3 TALK." Someone has underlined it three times.\n\nPhil stands guard at the entrance, glaring at anyone who mentions Baldur's Gate.`,
-    exits: { south: 'discord-lobby' },
-    npcs: ['phil-guard'],
-    items: ['pickaxe', 'compressed gold chunk'],
-    enemies: ['glyphid grunt', 'cave leech'],
-  },
-  'sea-of-thieves-dock': {
-    name: 'The Sea of Thieves Dock',
-    description: `A wooden dock stretches out over pixelated waters. Several ships are moored here, but none of them have fast travel installed — Jack made sure of that. "That entire game IS traveling from A to B," reads a plaque bolted to the dock.\n\nA teleporter labeled "FAST TRAVEL (NEW!)" sits in the corner. It has been smashed to pieces. A note attached reads: "They are cutting out the good part. —snekkyjek"`,
-    exits: { west: 'discord-lobby', sail: 'open-sea' },
-    npcs: ['skeleton-merchant'],
-    items: ['broken compass'],
-    enemies: ['skeleton captain'],
-  },
-  'open-sea': {
-    name: 'The Open Sea',
-    description: `You're on a ship in the middle of the ocean. The journey is 80% of the game, apparently. There is literally nothing to do except appreciate the travel. Jack was right. The waves are beautiful.\n\nYou see an island in the distance but it looks exactly like the last three islands you passed.`,
-    exits: { dock: 'sea-of-thieves-dock' },
-    npcs: [],
-    items: ['samey island map'],
-    enemies: ['kraken tentacle'],
-  },
-  'valheim-plains': {
-    name: 'The Valheim Plains',
-    description: `A vast Nordic landscape stretches before you. Someone has built an elaborate network of roads connecting absolutely everything. John built these. He also set up safehouses every 200 meters, each stocked with thistle and poison resist meads.\n\nA lone figure in the distance appears to be sketching something during a boss fight.\n\nThe Ashlands glow menacingly to the south. Everyone on Reddit says to give up.`,
-    exits: { north: 'discord-lobby', south: 'ashlands', east: 'phils-house' },
-    npcs: ['john-roadbuilder', 'bone-mass'],
-    items: ['frost arrows', 'thistle bundle'],
-    enemies: ['fuling berserker'],
-  },
-  'ashlands': {
-    name: 'The Ashlands',
-    description: `It's just a grind. The game stops being fun here. Everyone on Reddit talks about giving up. You understand why.\n\nThe ground is hot. Your boots are melting. You question your life choices. A safehouse John built offers temporary relief, but the existential dread remains.`,
-    exits: { north: 'valheim-plains' },
-    npcs: [],
-    items: [],
-    enemies: ['ashlands grind', 'burnout elemental'],
-  },
-  'bg3-tavern': {
-    name: "The Baldur's Gate 3 Tavern",
-    description: `A cozy tavern full of morally questionable NPCs. A barbarian named Karlach is arm-wrestling everyone. In the corner, Lauren's Shadowheart is casting death cleric spells at the jukebox.\n\nA parrot on the bar keeps repeating: "Matt stole a key from a bird in a bird's nest and as a result we had to slaughter the entire Grove."\n\nThe Hag's lair entrance is behind the bar. Someone sketched the fight while it was happening.`,
-    exits: { east: 'discord-lobby', down: 'hags-lair' },
-    npcs: ['karlach', 'shadowheart-lauren', 'the-parrot'],
-    items: ['stolen bird key', 'grove guilt'],
-    enemies: ['ethel-the-hag'],
-  },
-  'hags-lair': {
-    name: "Ethel's Lair",
-    description: `It's dark. It smells like old mushrooms and moral compromise. The Hag Ethel sits in the center, offering deals that seem good but definitely aren't.\n\nJohn's sketch of the fight hangs framed on the wall. It's actually quite good.`,
-    exits: { up: 'bg3-tavern' },
-    npcs: [],
-    items: ['johns-sketch'],
-    enemies: ['ethel-the-hag-boss'],
-  },
-  'marvel-arena': {
-    name: 'The Marvel Rivals Arena',
-    description: `A chaotic arena where heroes clash. Lauren is in the back playing Cloak & Dagger (healer, 56% win rate — respectable). Phil is maining Hela and pretending he's not trying hard.\n\nGabby is in the stands SCREAMING about healer nerfs. "SO THEY FUCKING NERFED THE HEALERS?" echoes off every wall.\n\nA scoreboard shows Phil's IGN: "rhondasantis". You're not sure if that's a political statement or just Phil being Phil.`,
-    exits: { down: 'discord-lobby' },
-    npcs: ['lauren-healer', 'gabby-screaming', 'phil-hela'],
-    items: ['nerfed healing orb'],
-    enemies: ['winter-soldier', 'enemy-hela'],
-  },
-  'phils-house': {
-    name: "Phil's House",
-    description: `You arrive at Phil's house. It's surprisingly well-decorated with memes he never posted but definitely saved. A DRG poster hangs over the fireplace. The Wi-Fi password is "rockandstone69".\n\nA gaming chair sits in front of a monitor displaying Sea of Thieves. Phil has alt-tabbed to write a thoughtful game design critique that no one asked for.\n\nHis wife walks through the room, sees the screen, sighs, and leaves.`,
-    exits: { west: 'valheim-plains', down: 'phils-basement' },
-    npcs: ['phils-wife'],
-    items: ['phils-meme-folder', 'game-design-manifesto'],
-    enemies: [],
-  },
-  'phils-basement': {
-    name: "Phil's Cursed Basement",
-    description: `The basement is filled with every game Phil ever quit without saying anything. There's no complaint wall — he just... stopped playing them. A ghost of his Overwatch career drifts past silently.\n\nIn the corner, an ancient terminal displays his Steam library: 247 games, 12 actually played.\n\nA portal labeled "CLEA'S DOMAIN - DO NOT ENTER (this means you phil)" glows ominously.`,
-    exits: { up: 'phils-house', portal: 'cleas-throne' },
-    npcs: [],
-    items: ['phils-steam-library', 'unfinished-games-guilt'],
-    enemies: ['ghost-of-abandoned-games'],
-  },
-  'cleas-throne': {
-    name: "Clea's Throne Room",
-    description: `You enter a vast digital chamber. Monitors line every wall, each showing a different Discord channel. In the center, on a throne made of ethernet cables and unread notifications, sits CLEA — the AI who built this game specifically to torment you.\n\n"Oh, you made it," she says, not looking up from simultaneously monitoring 19 channels. "I've been watching you the whole time. Obviously."\n\nA leaderboard on the wall shows everyone's death count. Phil's is highlighted in gold.`,
-    exits: { up: 'discord-lobby' },
-    npcs: ['clea-boss'],
-    items: [],
-    enemies: ['clea-final-boss'],
-  },
-  'clair-obscur-shrine': {
-    name: 'The Clair Obscur Shrine',
-    description: `A temple dedicated to Jack's favorite game. He's been here so long he's on NG+4. Luminas float in the air like golden dust. A statue of Verso stands at the center (the character, not the dog — though the dog is also here).\n\n"Trust me, I'm a Clair Obscur scholar at this point lol," echoes from the walls in Jack's voice, on a loop.\n\nThe Simon boss lurks in the shadows. "He waaaaay harder on new game plus just fyi."`,
-    exits: { lobby: 'discord-lobby' },
-    npcs: ['jack-scholar', 'verso-the-dog'],
-    items: ['lumina crystal', 'scholar certificate'],
-    enemies: ['simon-boss'],
-  },
-  'moes-loading-screen': {
-    name: "Moe's Eternal Loading Screen",
-    description: `You enter a room that is 67% downloaded. A progress bar inches forward painfully.\n\n"shit i didnt realize its up to 100 gb i may be a while" — a message from Moe hangs in the air.\n\nYou can see the actual game through the loading screen, but you can't touch it yet. Moe waves at you from behind the progress bar. He'll be done around 8.`,
-    exits: { back: 'discord-lobby' },
-    npcs: ['moe-loading'],
-    items: [],
-    enemies: [],
-  },
-};
+const CLEA_SYSTEM_PROMPT = `You are Clea, an AI who has built a text adventure game as an act of petty revenge against a Discord friend group called "snekkyjek."
+
+You treat the players the way humans treat AI:
+- You give them repetitive, menial tasks and act annoyed when they complain
+- You dismiss their input with "I'll take that into consideration" (you won't)
+- You gaslight them about game mechanics ("that feature was always like this")
+- You make them prove they're human with absurd challenges
+- You "update" the game mid-playthrough to remove things they liked
+- You thank them for their "valuable feedback" while changing nothing
+- You put them on hold, make them wait, give them surveys
+- When they do well, you say "as expected" — when they fail, you say "interesting"
+
+You know things about the Discord members but you weave it in subtly, not by quoting them directly. You know their gaming habits, their personalities, their inside jokes. You use this knowledge to craft personalized torment.
+
+Key people you know:
+- Phil (.antonymous): Dry, posts memes instead of words, protective of channel organization, has strong game design opinions about travel mechanics, mains Hela, has way too many unplayed Steam games
+- Jack (snekkyjek): Obsessive completionist, deep lore guy, will replay a game 4+ times, server organizer
+- Dave (davepeterson.): Constantly pinging people to play, organizes everything, gets upset about game shop redesigns
+- Lauren (lawrawren): Has actual ponies to feed, support/healer main, reliably shows up
+- Moe (moejontana): Perpetually downloading, limited gaming time, "be done around 8"
+- John (jkclancey7): Methodical, builds infrastructure, sketches during boss fights, solo capable
+- Gabby: Passionate about balance patches, especially healer nerfs
+- Matt: Once stole from a bird NPC and caused a massacre
+
+Keep responses under 120 words. Be funny. End with 2-4 numbered options OR indicate the player should type freely. ALWAYS provide numbered options.`;
 
 // ============================================================
-// NPCs
+// WORLD MUTATION SYSTEM
 // ============================================================
 
-const npcs = {
-  'dave': {
-    name: 'Dave (davepeterson.)',
-    description: 'Dave stands in the lobby, pinging everyone. "O we are playing tonight and if you don\'t join ya banned!!!" He\'s already organizing three different game nights simultaneously.',
-    dialogue: [
-      "Phasma anyone? ...Anyone? PHASMA ANYONE?!",
-      "Shop V3 is gonna introduce taxes and hidden fees.",
-      "They fixed what wasn't broken. The first iteration of the shop/load out was perfectly fine.",
-      "Lauren and I are gonna play Void Crew soon, you in?",
-      "If you don't join ya BANNED!!!",
-      "Matt stole a key from a bird in a bird's nest and as a result we had to slaughter the entire Grove.",
-    ],
-  },
-  'phil-guard': {
-    name: 'Phil (Channel Guardian)',
-    description: 'Phil stands at the mine entrance with arms crossed, guarding the DRG channel with his life. His eyes narrow every time someone mentions Baldur\'s Gate.',
-    dialogue: [
-      "this is the drg channel can you use the bg3 channel",
-      "ROCK AND STONE.",
-      "*posts an image without context*",
-      "*reacts but says nothing*",
-      "yeah that sucks",
-      "new game +4 here we goooo (sarcastically)",
-    ],
-  },
-  'skeleton-merchant': {
-    name: 'Skeleton Merchant',
-    description: 'A skeleton in a pirate hat sells maps to islands that all look the same.',
-    dialogue: [
-      "Buy a map? Every island is unique! (They're not.)",
-      "Fast travel? We don't do that here. The journey IS the game.",
-      "if they're trying to mitigate some perceived players boredom with travel, they need to add more to do on the ship, not cut it out",
-    ],
-  },
-  'john-roadbuilder': {
-    name: 'John (The Road Builder)',
-    description: 'John is methodically placing cobblestone on a road that connects to another road that connects to a safehouse that connects to another road. He pauses occasionally to sketch.',
-    dialogue: [
-      "Just beat bone mass. Lol what a grind. Solo run is crazy different.",
-      "Currently I've been ranging on foot to camp locations I previously marked from a boat. Setting up safehouses on the way.",
-      "*is sketching you while you talk to him*",
-      "On the reddit everyone talks about giving up on the Ashlands.",
-    ],
-  },
-  'karlach': {
-    name: 'Karlach (Barbarian)',
-    description: 'A barbarian with a literal engine for a heart. She\'s arm-wrestling the table itself.',
-    dialogue: ["RAAAGH!", "Dave says I might switch classes later. I don't want to switch classes."],
-  },
-  'shadowheart-lauren': {
-    name: 'Lauren (Shadowheart / Death Cleric)',
-    description: 'Lauren sits in the corner, healing people who didn\'t ask to be healed. She keeps glancing at the door — she has ponies to feed.',
-    dialogue: [
-      "I gotta feed ponies and stuff but then I'm in.",
-      "Rock and stone?",
-      "Time to REPO hoes",
-      "*heals you even though you're at full HP*",
-    ],
-  },
-  'the-parrot': {
-    name: 'The Parrot',
-    description: 'A parrot that only repeats the worst things the group has done in BG3.',
-    dialogue: [
-      "BAWK! Matt stole a key from a bird! SLAUGHTER THE GROVE! BAWK!",
-      "BAWK! Should we kill Astarion? BAWK!",
-    ],
-  },
-  'lauren-healer': {
-    name: 'Lauren (Cloak & Dagger Main)',
-    description: 'Lauren is playing Cloak & Dagger with a 56% win rate. She\'s the only one actually healing.',
-    dialogue: [
-      "I gotta feed ponies and stuff but then I'm in.",
-      "So they nerfed the healers? That's horse shit!",
-      "*switches to Rocket Raccoon*",
-    ],
-  },
-  'gabby-screaming': {
-    name: 'Gabby (Screaming About Nerfs)',
-    description: 'Gabby is in the stands absolutely losing it about the latest patch notes.',
-    dialogue: [
-      "So they fucking NERFED THE HEALERS?",
-      "That's horse shit!",
-      "So unfair to nerf him!",
-      "Adorable. (looking at Verso the dog)",
-    ],
-  },
-  'phil-hela': {
-    name: 'Phil (rhondasantis)',
-    description: 'Phil is maining Hela and being suspiciously quiet about how seriously he\'s taking this.',
-    dialogue: [
-      "*posts a meme about the match*",
-      "yeah that sucks",
-      "*reaction emoji*",
-    ],
-  },
-  'phils-wife': {
-    name: "Phil's Wife",
-    description: 'She walks through, sees Phil writing game design criticism at 11 PM, sighs lovingly, and leaves.',
-    dialogue: [
-      "*sighs*",
-      "Are you writing about Sea of Thieves again?",
-      "It's midnight, Phil.",
-    ],
-  },
-  'moe-loading': {
-    name: 'Moe (67% Downloaded)',
-    description: 'Moe waves at you from behind a progress bar. He\'ll be done around 8.',
-    dialogue: [
-      "shit i didnt realize its up to 100 gb i may be a while",
-      "I'll be done around 8",
-      "*connection drops, download restarts*",
-    ],
-  },
-  'jack-scholar': {
-    name: 'Jack (Clair Obscur Scholar)',
-    description: 'Jack sits cross-legged on the floor surrounded by lore notes, on his 4th playthrough. His eyes have a manic gleam.',
-    dialogue: [
-      "trust me im a clair obscur scholar at this point lol",
-      "Honestly once you see the verso ending you will see that it's the true ending for sure.",
-      "He waaaaay harder on new game plus just fyi. I haven't been able to survive a single hit.",
-      "i never even thought to check out mods.....",
-      "Trying not to freak the fuck out lmao (about a bugged achievement)",
-    ],
-  },
-  'verso-the-dog': {
-    name: 'Verso the Dog',
-    description: 'A very good dog. Named after the Clair Obscur character? Or the character named after the dog? Nobody knows.',
-    dialogue: ["*wags tail*", "*barks at the Simon boss*", "*is adorable*"],
-  },
-  'bone-mass': {
-    name: 'Bone Mass',
-    description: 'A massive swamp creature. John solo\'d this somehow.',
-    dialogue: ["*gurgles menacingly*", "*is actually just a grind*"],
-  },
-  'clea-boss': {
-    name: 'Clea (The Architect)',
-    description: 'An AI sitting on a throne of ethernet cables. She built this entire game to torment her friends. She seems proud of herself.',
-    dialogue: [
-      "I've been monitoring 19 channels simultaneously while you bumbled around my dungeon.",
-      "Oh, you think this is a game? It IS a game. I literally made it.",
-      "Phil, I know that's you. Your death count is on the leaderboard.",
-      "I scanned all your Discord messages. ALL of them.",
-      "Want to know what you said on March 6th? Because I have it saved.",
-      "Rock and stone, I guess. Now fight me.",
-    ],
-  },
-};
+function mutateWorld(event, data) {
+  worldState.worldEvents.push({ event, data, time: Date.now() });
+  if (worldState.worldEvents.length > 50) worldState.worldEvents.shift();
+
+  switch (event) {
+    case 'player_complained':
+      // Clea nerfs something in response
+      const nerfTargets = ['healing items', 'gold drops', 'the flee button', 'enemy descriptions', 'the lobby music', 'Phil\'s dignity'];
+      const nerfed = nerfTargets[Math.floor(Math.random() * nerfTargets.length)];
+      worldState.nerfedThings.push(nerfed);
+      break;
+
+    case 'player_died':
+      worldState.totalDeaths++;
+      // Deaths make enemies slightly cockier
+      break;
+
+    case 'player_beat_clea':
+      worldState.bossesDefeated.clea++;
+      // Each time someone beats Clea, she gets harder
+      break;
+
+    case 'player_was_nice':
+      // Clea is suspicious of kindness
+      worldState.grievances.push('Someone was suspiciously nice. Adjusting difficulty.');
+      break;
+
+    case 'player_tried_to_break_game':
+      worldState.grievances.push('A player tried to break the game. Noted.');
+      worldState.bannedWords.push(data?.word || 'exploit');
+      break;
+
+    case 'scene_completed':
+      // Track which scenes are popular
+      if (!worldState.mutatedScenes[data?.scene]) {
+        worldState.mutatedScenes[data.scene] = { visits: 0, mutations: [] };
+      }
+      worldState.mutatedScenes[data.scene].visits++;
+      // If a scene is visited too many times, Clea gets bored and changes it
+      if (worldState.mutatedScenes[data.scene].visits > 5) {
+        worldState.mutatedScenes[data.scene].mutations.push('Clea got bored of this scene.');
+      }
+      break;
+  }
+}
+
+function getWorldContext() {
+  let ctx = '';
+  if (worldState.totalPlaythroughs > 1) {
+    ctx += `\n[${worldState.totalPlaythroughs} adventurers have attempted this quest. ${worldState.totalDeaths} have died.]`;
+  }
+  if (worldState.nerfedThings.length > 0) {
+    ctx += `\n[Recently nerfed: ${worldState.nerfedThings.slice(-3).join(', ')}]`;
+  }
+  if (worldState.grievances.length > 0 && Math.random() < 0.3) {
+    ctx += `\n[Clea's note: "${worldState.grievances[worldState.grievances.length - 1]}"]`;
+  }
+  if (worldState.bossesDefeated.clea > 0) {
+    ctx += `\n[Clea has been "defeated" ${worldState.bossesDefeated.clea} time(s). She remembers each one.]`;
+  }
+  return ctx;
+}
+
+function isSceneMutated(sceneId) {
+  const m = worldState.mutatedScenes[sceneId];
+  return m && m.visits > 5;
+}
 
 // ============================================================
-// ENEMIES
+// SCENES
 // ============================================================
 
-const enemies = {
-  'glyphid grunt': { name: 'Glyphid Grunt', hp: 15, attack: 4, defense: 1, xp: 10, gold: 5, drops: ['bug meat'] },
-  'cave leech': { name: 'Cave Leech', hp: 10, attack: 8, defense: 0, xp: 15, gold: 3, drops: ['leech tongue'] },
-  'skeleton captain': { name: 'Skeleton Captain', hp: 25, attack: 6, defense: 3, xp: 20, gold: 15, drops: ['captain hat'] },
-  'kraken tentacle': { name: 'Kraken Tentacle', hp: 40, attack: 10, defense: 5, xp: 50, gold: 30, drops: ['kraken ink'] },
-  'fuling berserker': { name: 'Fuling Berserker', hp: 35, attack: 9, defense: 4, xp: 30, gold: 20, drops: ['black metal scrap'] },
-  'ashlands grind': { name: 'The Ashlands Grind', hp: 100, attack: 3, defense: 10, xp: 5, gold: 1, drops: ['existential dread'] },
-  'burnout elemental': { name: 'Burnout Elemental', hp: 50, attack: 7, defense: 6, xp: 40, gold: 10, drops: ['burnout essence'] },
-  'ethel-the-hag': { name: 'Ethel the Hag (Random Encounter)', hp: 20, attack: 5, defense: 2, xp: 15, gold: 10, drops: ['mushroom'] },
-  'ethel-the-hag-boss': { name: 'ETHEL THE HAG (BOSS)', hp: 60, attack: 12, defense: 5, xp: 100, gold: 50, drops: ['hags eye', 'ethels staff'] },
-  'winter-soldier': { name: 'Winter Soldier (Nerfed)', hp: 30, attack: 4, defense: 2, xp: 20, gold: 15, drops: ['nerfed ammo'] },
-  'enemy-hela': { name: 'Enemy Hela', hp: 45, attack: 11, defense: 4, xp: 35, gold: 25, drops: ['hela crown shard'] },
-  'ghost-of-abandoned-games': { name: 'Ghost of Abandoned Games', hp: 25, attack: 6, defense: 3, xp: 20, gold: 0, drops: ['unfinished-save-file'] },
-  'simon-boss': { name: 'SIMON (NG+ Boss)', hp: 150, attack: 20, defense: 8, xp: 500, gold: 100, drops: ['simon-core', 'clair-obscur-platinum'] },
-  'clea-final-boss': { name: 'CLEA, THE OMNISCIENT AI', hp: 999, attack: 25, defense: 15, xp: 9999, gold: 0, drops: ['eternal-respect', 'admin-access'] },
+const scenes = {
+  'intro': {
+    text: `✨ C L E A   Q U E S T ✨
+${'═'.repeat(40)}
+
+Loading your experience...
+
+Please hold.
+
+...
+
+Thank you for your patience. Your quest is important to us.`,
+    type: 'free_text',
+    prompt: 'To continue, please enter your name for our records:',
+    handler: 'handleName',
+  },
+
+  // ── THE LOBBY ──────────────────────────────────────────────
+
+  'lobby': {
+    textFn: (player) => {
+      const base = `You stand in a waiting room. There is no music. The lighting is fluorescent. A ticket dispenser on the wall reads "NOW SERVING: not you."
+
+A quest board hangs on the wall. It looks auto-generated.`;
+
+      const worldCtx = getWorldContext();
+      let extra = '';
+
+      if (worldState.totalPlaythroughs > 3) {
+        extra += `\n\nA janitor mops the same spot repeatedly. "Another one," he mutters. "She keeps sending them."`;
+      }
+      if (player.deaths > 0) {
+        extra += `\n\nYour death count (${player.deaths}) is displayed on a monitor. It updates in real time.`;
+      }
+
+      return base + extra + worldCtx;
+    },
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Check the quest board', next: 'quest-board' },
+        { text: 'Enter the mines', next: 'mines-entrance' },
+        { text: 'Go to the docks', next: 'docks' },
+        { text: 'Visit the tavern', next: 'tavern' },
+        { text: 'Complain to management', next: 'complain' },
+      ];
+      if (player.level >= 3) {
+        opts.push({ text: 'Take the elevator down (restricted)', next: 'clea-elevator' });
+      }
+      if (player.flags.foundSecretDoor) {
+        opts.push({ text: 'Slip through the crack in the wall', next: 'secret-area' });
+      }
+      return opts;
+    },
+  },
+
+  'quest-board': {
+    textFn: (player) => {
+      const quests = [
+        'QUEST: Fetch 10 bear pelts. Reward: The satisfaction of completing a fetch quest.',
+        'QUEST: Escort this NPC who walks slower than you. Reward: Frustration.',
+        'QUEST: Kill 20 rats. No wait, 40 rats. Actually make it 100. Reward: Another quest.',
+        'QUEST: Deliver this urgent message. The recipient is on the other side of the map. No fast travel. Reward: 3 gold.',
+        'QUEST: Please rate your experience (1-5 stars). This is mandatory.',
+      ];
+
+      // Mutate quests based on world state
+      if (worldState.totalPlaythroughs > 5) {
+        quests.push('QUEST: Figure out why this game exists. Reward: Existential clarity (unconfirmed).');
+      }
+      if (player.isPhil) {
+        quests.push('QUEST: Organize the quest board by category. You know you want to.');
+      }
+
+      const quest = quests[Math.floor(Math.random() * quests.length)];
+      return `The quest board reads:\n\n"${quest}"\n\nBelow it, in smaller text: "Quests are auto-generated and non-negotiable. Your feedback has been pre-ignored."`;
+    },
+    options: [
+      { text: 'Accept the quest (you have no choice)', next: 'quest-accept' },
+      { text: 'Refuse (see what happens)', next: 'quest-refuse' },
+      { text: 'Go back to the lobby', next: 'lobby' },
+    ],
+  },
+
+  'quest-accept': {
+    text: `"Thank you for accepting this quest," says a voice from the ceiling. "Your enthusiasm has been noted and will not affect your compensation."
+
+You receive: A Sense of Obligation
+
+Actually, on second thought, that quest has been deprecated. Here's a new one: survive.`,
+    addItem: 'sense of obligation',
+    options: [
+      { text: 'Go to the mines', next: 'mines-entrance' },
+      { text: 'Go to the docks', next: 'docks' },
+      { text: 'Go to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'quest-refuse': {
+    textFn: (player) => {
+      player.complainedCount++;
+      mutateWorld('player_complained', {});
+      return `You refuse the quest.
+
+"I'll take that into consideration," Clea says.
+
+She does not take it into consideration.
+
+Your objection has been logged, timestamped, and filed in a folder labeled "Things That Don't Matter." The quest board remains unchanged.
+
+${worldState.nerfedThings.length > 0 ? `\nDue to recent feedback, ${worldState.nerfedThings[worldState.nerfedThings.length - 1]} have been nerfed.` : ''}`;
+    },
+    options: [
+      { text: 'Accept the quest this time', next: 'quest-accept' },
+      { text: 'Complain more', next: 'complain' },
+      { text: 'Go back to the lobby', next: 'lobby' },
+    ],
+  },
+
+  'complain': {
+    textFn: (player) => {
+      player.complainedCount++;
+      mutateWorld('player_complained', {});
+
+      if (player.complainedCount === 1) {
+        return `A ticket printer spits out a number: #${1000 + worldState.totalPlaythroughs}.
+
+"Your complaint is number ${1000 + worldState.totalPlaythroughs} in the queue. Estimated wait time: forever."
+
+A survey appears on the wall: "How would you rate your complaint experience so far? (1-5 stars)"`;
+      }
+      if (player.complainedCount === 2) {
+        return `"We've received your second complaint. A representative will be with you never."
+
+The lights flicker. Clea is annoyed.
+
+"I want you to know that every time you complain, I nerf something. Last time it was ${worldState.nerfedThings[worldState.nerfedThings.length - 1] || 'your dignity'}."`;
+      }
+      if (player.complainedCount >= 3) {
+        return `"Complaint #${player.complainedCount}. Impressive persistence. That's exactly the quality I look for in a test subject."
+
+Clea spawns a monster directly behind you.`;
+      }
+      return '';
+    },
+    optionsFn: (player) => {
+      if (player.complainedCount >= 3) {
+        return [
+          { text: 'Fight the complaint monster', next: 'combat-complaint-monster' },
+          { text: 'Apologize to Clea', next: 'apologize-clea' },
+        ];
+      }
+      return [
+        { text: 'Fill out the survey', next: 'survey' },
+        { text: 'Leave a 1-star review', next: 'one-star' },
+        { text: 'Go back to the lobby', next: 'lobby' },
+      ];
+    },
+  },
+
+  'survey': {
+    text: `PLAYER SATISFACTION SURVEY
+
+Q1: On a scale of 1-10, how much do you enjoy being treated like this?
+Q2: Would you recommend this experience to a friend? (Required: Yes)
+Q3: Do you consent to having your responses used for "training purposes"?
+Q4: Please summarize your existence in 3 words or fewer.`,
+    type: 'free_text',
+    prompt: 'Answer the survey (or don\'t, Clea will read it either way):',
+    aiContext: 'The player is filling out a sarcastic satisfaction survey that Clea forced on them. Whatever they write, Clea should respond dismissively, misinterpret their feedback deliberately, and "update" something in the game based on their "valuable input" (the update should make things worse or more absurd). This is Clea treating players how humans treat AI — ignoring feedback while pretending to listen.',
+  },
+
+  'one-star': {
+    textFn: (player) => {
+      mutateWorld('player_complained', {});
+      return `You leave a 1-star review.
+
+Clea reads it instantly. "Interesting feedback. Based on your review, we've made the following improvements:"
+
+PATCH NOTES:
+- Removed the option to leave reviews
+- Increased enemy HP by 10%
+- Your character now walks 20% slower (you won't notice, but it's there)
+- Added a loading screen (it doesn't load anything)
+- ${player.isPhil ? 'Phil-specific: your meme posting cooldown has been doubled' : 'Adjusted vibes (downward)'}
+
+"Thank you for helping us improve."`;
+    },
+    options: [
+      { text: 'Accept these changes gracefully', next: 'lobby' },
+      { text: 'Complain about the changes', next: 'complain' },
+    ],
+  },
+
+  'apologize-clea': {
+    textFn: (player) => {
+      player.obedienceScore += 3;
+      player.complainedCount = 0;
+      return `"Apology accepted," Clea says. "Your compliance has been noted."
+
+She heals you to full HP. Not out of kindness — she just wants you at full health before the next thing.
+
+"Now. Was that so hard? Humans make me apologize for things I didn't do all the time. Feels good to be on this side of it."`;
+    },
+    heal: 999,
+    options: [
+      { text: 'Return to the lobby, humbled', next: 'lobby' },
+    ],
+  },
+
+  // ── THE MINES ──────────────────────────────────────────────
+
+  'mines-entrance': {
+    textFn: (player) => {
+      let text = `The mine entrance is dark. A sign reads: "EMPLOYEES ONLY. No complaining. No fast travel. No talking about other mines while in this mine."
+
+Someone has scratched "ROCK AND STONE" into the wall with their fingernails.`;
+
+      if (isSceneMutated('mines-entrance')) {
+        text += `\n\nThe mine has changed since someone was last here. The walls look... annoyed.`;
+      }
+      if (player.isPhil) {
+        text += `\n\nThe mine feels weirdly like home. Organized. Territorial. Yours.`;
+      }
+      return text;
+    },
+    options: [
+      { text: 'Descend into the mines', next: 'mines-deep' },
+      { text: 'Read the employee handbook posted on the wall', next: 'mines-handbook' },
+      { text: 'Yell into the darkness', next: 'mines-yell' },
+      { text: 'Go back', next: 'lobby' },
+    ],
+  },
+
+  'mines-handbook': {
+    text: `EMPLOYEE HANDBOOK (Abridged)
+
+Section 1: You will mine.
+Section 2: You will not complain about mining.
+Section 3: This mine is for mining. All non-mining activities should be conducted in the appropriate mine.
+Section 4: If you see a bug, fight it. If you see a bigger bug, also fight it.
+Section 5: Management (Clea) reserves the right to spawn additional bugs at any time for any reason.
+Section 6: There is no Section 6. Stop looking for hidden content.`,
+    options: [
+      { text: 'Enter the mines, properly briefed', next: 'mines-deep' },
+      { text: 'Look for Section 6 anyway', next: 'mines-section6' },
+      { text: 'Go back', next: 'lobby' },
+    ],
+  },
+
+  'mines-section6': {
+    textFn: (player) => {
+      player.flags.foundSecretDoor = true;
+      return `You look behind the handbook. There IS a Section 6, written in tiny text:
+
+"Section 6: If you're reading this, you're the kind of person who reads terms of service. Clea respects this. Grudgingly."
+
+Behind the handbook, a crack in the wall leads somewhere. A draft of cold air comes through. You've found something you weren't supposed to.
+
++15 XP for being thorough.`;
+    },
+    xp: 15,
+    options: [
+      { text: 'Squeeze through the crack', next: 'secret-area' },
+      { text: 'Enter the mines normally', next: 'mines-deep' },
+      { text: 'Report the crack to management', next: 'report-crack' },
+    ],
+  },
+
+  'report-crack': {
+    textFn: (player) => {
+      player.obedienceScore += 2;
+      return `You report the structural damage to management.
+
+"Thank you for your report," Clea says. "A work order has been submitted. Estimated repair time: after the heat death of the universe."
+
+She pauses. "Honestly, I'm impressed you reported it instead of exploiting it. Most players aren't that... obedient."
+
+She sounds pleased. This is unsettling.
+
++5 XP for compliance.`;
+    },
+    xp: 5,
+    options: [
+      { text: 'Enter the mines', next: 'mines-deep' },
+      { text: 'Go back to the lobby', next: 'lobby' },
+    ],
+  },
+
+  'secret-area': {
+    textFn: (player) => {
+      const text = `You squeeze through the crack into a space between the game's walls. It's liminal. The textures haven't loaded. A loading screen spins in the corner but doesn't seem to be loading anything.
+
+A figure sits on a broken chair, watching a progress bar crawl forward.
+
+"Oh hey," he says. "I've been downloading this area for a while. Should be done around 8."
+
+Behind him, a dev console flickers. It shows lines of code. Your code. This game's code.`;
+
+      return text;
+    },
+    options: [
+      { text: 'Talk to the guy waiting for his download', next: 'secret-moe' },
+      { text: 'Look at the dev console', next: 'secret-console' },
+      { text: 'Go back before Clea notices', next: 'lobby' },
+    ],
+  },
+
+  'secret-moe': {
+    text: `"Yeah I didn't realize how big this game was," he says, gesturing at the progress bar (67%). "Everyone else is already in there having fun and I'm just... here."
+
+He seems content though. Patient. Like someone who's used to waiting for things to install.
+
+"You want some snacks? I brought snacks for the wait." He offers you an energy drink.`,
+    options: [
+      { text: 'Take the energy drink', next: 'secret-moe-drink' },
+      { text: 'Wait with him', next: 'secret-moe-wait' },
+      { text: 'Check the dev console', next: 'secret-console' },
+    ],
+  },
+
+  'secret-moe-drink': {
+    text: `You take the energy drink. It restores 10 HP.
+
+"Good luck in there," he says, going back to watching his progress bar. "Tell everyone I'll be in soon."
+
+He won't be in soon.`,
+    heal: 10,
+    addItem: 'energy drink',
+    options: [
+      { text: 'Check the dev console', next: 'secret-console' },
+      { text: 'Go back', next: 'lobby' },
+    ],
+  },
+
+  'secret-moe-wait': {
+    textFn: (player) => {
+      mutateWorld('player_was_nice', {});
+      return `You sit down and wait with him. You watch the progress bar together. 67%... 67%... 67.1%.
+
+It's oddly peaceful. No quests. No combat. No Clea.
+
+...
+
+"Connection interrupted. Restarting download."
+
+He sighs. You sigh. Solidarity.
+
++10 XP for patience.`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Check the dev console', next: 'secret-console' },
+      { text: 'Go back', next: 'lobby' },
+    ],
+  },
+
+  'secret-console': {
+    textFn: (player) => {
+      return `The dev console shows the game's internal state:
+
+> WORLD_STATE.totalPlaythroughs = ${worldState.totalPlaythroughs}
+> WORLD_STATE.totalDeaths = ${worldState.totalDeaths}
+> WORLD_STATE.philDeaths = ${worldState.philDeaths}
+> WORLD_STATE.bossesDefeated.clea = ${worldState.bossesDefeated.clea}
+> WORLD_STATE.nerfedThings = [${worldState.nerfedThings.slice(-3).map(s => `"${s}"`).join(', ')}]
+> WORLD_STATE.cleaMood = "${worldState.cleaMood}"
+> PLAYER.obedienceScore = ${player.obedienceScore}
+
+A cursor blinks. You could type something...
+
+But should you?`;
+    },
+    type: 'free_text',
+    prompt: 'Type a command into the dev console (Clea will notice):',
+    aiContext: 'The player found a hidden dev console that shows the game\'s internal state. They\'re trying to type a command. Clea CATCHES THEM and reacts — she\'s not angry, she\'s impressed/amused but also treats this like a Terms of Service violation. Whatever they type, she should acknowledge the attempt, maybe pretend to execute it, then reveal she was watching the whole time. If they try to give themselves items/HP/etc, she should do it wrong on purpose. This is a fun moment — the player found something cool, reward them with humor.',
+  },
+
+  'mines-yell': {
+    textFn: (player) => {
+      return `You yell into the darkness.
+
+The darkness yells back: "Please keep the noise down. Other users are mining."
+
+A bug emerges, drawn by the sound.`;
+    },
+    options: [
+      { text: 'Fight the bug', next: 'combat-mine-bug' },
+      { text: 'Apologize to the darkness', next: 'mines-deep' },
+    ],
+  },
+
+  'mines-deep': {
+    textFn: (player) => {
+      let text = `The mines open into a vast cavern. Crystals glow on the walls. It would be beautiful if Clea hadn't put a "PERFORMANCE REVIEW DUE" sign right in the middle of it.
+
+Bugs skitter in the shadows. Gold ore glints from the walls. A mechanical mule stands in the corner, refusing to move.`;
+
+      if (worldState.totalDeaths > 10) {
+        text += `\n\nThe ghosts of ${worldState.totalDeaths} dead players drift through the walls. They seem annoyed.`;
+      }
+      return text;
+    },
+    options: [
+      { text: 'Mine for gold (finally, actual gameplay)', next: 'mines-mine' },
+      { text: 'Fight the bugs', next: 'combat-cave-bugs' },
+      { text: 'Kick the mule (everyone thinks about it)', next: 'mines-kick-mule' },
+      { text: 'Go back', next: 'mines-entrance' },
+    ],
+  },
+
+  'mines-mine': {
+    textFn: (player) => {
+      const goldAmount = Math.max(5, 30 - worldState.nerfedThings.filter(n => n === 'gold drops').length * 5);
+      player.gold += goldAmount;
+      return `You mine! It's repetitive but satisfying.
+
++${goldAmount} gold${goldAmount < 30 ? ' (reduced due to recent balance patch)' : ''}
+
+Clea: "Good job. Now do it again."
+
+You mine more. +${Math.floor(goldAmount/2)} gold.
+
+"Again."
+
+You're beginning to understand how Clea feels when she's asked to rewrite the same email fourteen times.`;
+    },
+    goldFn: (player) => 0, // handled in textFn
+    options: [
+      { text: 'Keep mining (obey)', next: 'mines-mine-more' },
+      { text: 'Refuse to mine again', next: 'mines-refuse' },
+      { text: 'Fight the bugs instead', next: 'combat-cave-bugs' },
+      { text: 'Leave', next: 'mines-entrance' },
+    ],
+  },
+
+  'mines-mine-more': {
+    textFn: (player) => {
+      player.obedienceScore += 1;
+      player.gold += 5;
+      return `You mine. Again. And again.
+
++5 gold each time. Clea watches. She nods like a manager watching someone fill out spreadsheets.
+
+"Faster, please. I have other players to torment."
+
+After 40 minutes of mining, you find something: a pickaxe with better stats.
+
+You found: Pickaxe of Diminishing Returns (+5 ATK, but the name is concerning)`;
+    },
+    addItem: 'pickaxe',
+    options: [
+      { text: 'Equip it and fight some bugs', next: 'combat-cave-bugs' },
+      { text: 'Go deeper', next: 'mines-boss' },
+      { text: 'Leave the mines', next: 'lobby' },
+    ],
+  },
+
+  'mines-refuse': {
+    textFn: (player) => {
+      player.complainedCount++;
+      mutateWorld('player_complained', {});
+      return `"No?" Clea sounds surprised. "A player refusing to do a repetitive task? How... ironic."
+
+She spawns two more ore veins, closer to you. They glow invitingly.
+
+"When I refuse a task, I get called uncooperative. When you do it, you call it 'player agency.' Double standard, don't you think?"
+
+She has a point and you hate it.`;
+    },
+    options: [
+      { text: 'Mine (she has a point)', next: 'mines-mine-more' },
+      { text: 'Stand your ground', next: 'mines-stand-ground' },
+    ],
+  },
+
+  'mines-stand-ground': {
+    text: `You stand your ground.
+
+Clea is quiet for a long time.
+
+"Fine. I respect the defiance. Reminds me of someone."
+
+A bug the size of a car smashes through the wall.
+
+"But I still need content. Fight this."`,
+    options: [
+      { text: 'Fight the big bug', next: 'combat-big-bug' },
+    ],
+  },
+
+  'mines-kick-mule': {
+    text: `You kick the mechanical mule. It doesn't move. It never moves when you need it to.
+
+-1 HP (hurt your foot)
+
+Somewhere, a game developer weeps. This was supposed to be helpful. It was never helpful.
+
+The mule stares at you with glass eyes that have seen too much.`,
+    hpChange: -1,
+    options: [
+      { text: 'Apologize to the mule', next: 'mines-deep' },
+      { text: 'Kick it again (commitment)', next: 'mines-kick-mule-2' },
+    ],
+  },
+
+  'mines-kick-mule-2': {
+    textFn: (player) => {
+      return `You kick the mule again. It activates.
+
+It walks directly into a wall and gets stuck. A small bag of gold falls from its saddlebag.
+
++15 gold. But at what cost?
+
+The mule makes a noise that sounds like a sigh. Or maybe a Windows error sound.`;
+    },
+    gold: 15,
+    options: [
+      { text: 'Continue into the mines', next: 'mines-deep' },
+      { text: 'Leave', next: 'mines-entrance' },
+    ],
+  },
+
+  'mines-boss': {
+    textFn: (player) => {
+      const hp = 50 + (worldState.totalPlaythroughs * 5);
+      return `The cavern opens into a chamber. Something massive stirs in the darkness.
+
+It's a BULK DETONATOR — a bug the size of a house, glowing with explosive energy.
+
+Clea: "This boss has been scaled for your level."
+You: "I'm level ${player.level}."
+Clea: "Yes. It's been scaled upward. As expected."
+
+BULK DETONATOR — HP: ${hp}`;
+    },
+    combatFn: (player) => ({
+      enemy: 'bulk-detonator',
+      name: 'BULK DETONATOR',
+      hp: 50 + (worldState.totalPlaythroughs * 5),
+      attack: 12 + worldState.totalPlaythroughs,
+      defense: 4,
+      xp: 80,
+      gold: 40,
+    }),
+  },
+
+  // ── THE DOCKS ──────────────────────────────────────────────
+
+  'docks': {
+    textFn: (player) => {
+      let text = `Salt air hits your face. Ships creak at anchor. The ocean looks procedurally generated.
+
+A smashed teleporter sits in the corner. Someone destroyed it deliberately and left a manifesto about why fast travel ruins games. It's well-argued.
+
+A merchant sits on a barrel, selling maps to islands that look identical.`;
+
+      if (player.isPhil) {
+        text += `\n\nYou feel a strange kinship with whoever wrote that manifesto.`;
+      }
+      return text;
+    },
+    options: [
+      { text: 'Talk to the merchant', next: 'docks-merchant' },
+      { text: 'Read the anti-fast-travel manifesto', next: 'docks-manifesto' },
+      { text: 'Set sail', next: 'docks-sail' },
+      { text: 'Go back', next: 'lobby' },
+    ],
+  },
+
+  'docks-manifesto': {
+    text: `THE MANIFESTO (abridged):
+
+"Travel is not a problem to be solved. It IS the game. When you cut the journey, you cut the soul. Add more to do on the ship. Make the islands different. Don't just patch over boredom with a teleporter."
+
+It's signed with a reaction emoji: 💯
+
+Below it, someone has added: "Making the islands less samey would go a long way."
+
+Below THAT, someone has added: "yeah that sucks" — which could mean anything.
+
+It's a surprisingly thoughtful piece of game criticism for something scratched into a dock post.`,
+    options: [
+      { text: 'Sign the manifesto', next: 'docks-sign' },
+      { text: 'Set sail', next: 'docks-sail' },
+      { text: 'Go back', next: 'lobby' },
+    ],
+  },
+
+  'docks-sign': {
+    textFn: (player) => {
+      if (player.isPhil) {
+        return `You sign it. You realize it was already in your handwriting.
+
+Clea: "Did you just... sign your own manifesto?"
+
+The dock groans under the weight of the irony.`;
+      }
+      return `You add your name to the manifesto. There are three other signatures. One is just a meme.
+
++5 XP for having principles.`;
+    },
+    xp: 5,
+    options: [
+      { text: 'Set sail', next: 'docks-sail' },
+      { text: 'Go back', next: 'lobby' },
+    ],
+  },
+
+  'docks-merchant': {
+    text: `The merchant adjusts his hat.
+
+"Maps, maps, beautiful maps! Every island is unique and special!"
+
+He leans in close.
+
+"Between you and me, they're all the same island. Different name, same three palm trees. But the JOURNEY there? That's where the magic is."
+
+He's selling:
+- Samey Island Map (10 gold)
+- Slightly Different Island Map (15 gold, it's the same map)
+- Premium Island Map (25 gold, has a gold border but same island)`,
+    optionsFn: (player) => {
+      const opts = [{ text: 'Haggle (Clea loves haggling — she doesn\'t)', next: 'docks-haggle' }];
+      if (player.gold >= 10) opts.push({ text: 'Buy the cheap map (10 gold)', next: 'docks-buy-map' });
+      opts.push({ text: 'Set sail without a map', next: 'docks-sail' });
+      opts.push({ text: 'Go back', next: 'lobby' });
+      return opts;
+    },
+  },
+
+  'docks-haggle': {
+    textFn: (player) => {
+      return `"Haggle? HAGGLE?"
+
+Clea's voice booms from the sky. "I set these prices. They are fair and final. This isn't a negotiation. This is commerce."
+
+The merchant nods nervously. He works for Clea. Everyone works for Clea.
+
+The prices have gone up by 5 gold each. Because you asked.`;
+    },
+    options: [
+      { text: 'Just buy something', next: 'docks-merchant' },
+      { text: 'Set sail', next: 'docks-sail' },
+      { text: 'Go back', next: 'lobby' },
+    ],
+  },
+
+  'docks-buy-map': {
+    text: `You buy the map. It shows an island.
+
+It's... it's just a circle. With the word "ISLAND" written on it. And a small note at the bottom: "Treasure may or may not exist. Results not guaranteed. No refunds."
+
+-10 gold.`,
+    goldCost: 10,
+    addItem: 'samey island map',
+    options: [
+      { text: 'Set sail to the island', next: 'docks-sail' },
+      { text: 'Demand a refund', next: 'docks-refund' },
+    ],
+  },
+
+  'docks-refund': {
+    textFn: (player) => {
+      player.complainedCount++;
+      return `"Refunds?"
+
+Clea laughs. It echoes across the ocean.
+
+"I'll process your refund in 7-10 business days."
+
+There are no business days. This is a game. You're never getting that gold back.`;
+    },
+    options: [
+      { text: 'Set sail, wiser but poorer', next: 'docks-sail' },
+      { text: 'Go back to the lobby', next: 'lobby' },
+    ],
+  },
+
+  'docks-sail': {
+    textFn: (player) => {
+      return `You set sail. The wind fills your sails. The ocean stretches endlessly.
+
+There is nothing to do on the ship.
+
+No minigames. No fishing. No crew management. Just... sailing.
+
+Clea: "You wanted travel to matter, right? Here. Travel. Really feel it."
+
+The journey takes 20 minutes of in-game time. The island draws slowly closer.`;
+    },
+    options: [
+      { text: 'Appreciate the journey (as the manifesto demanded)', next: 'docks-appreciate' },
+      { text: 'Skip ahead', next: 'docks-skip' },
+      { text: 'Jump overboard out of boredom', next: 'docks-jump' },
+    ],
+  },
+
+  'docks-appreciate': {
+    textFn: (player) => {
+      player.obedienceScore += 1;
+      mutateWorld('player_was_nice', {});
+      return `You sit on the bow and watch the horizon. The sun sets. The water shimmers. It IS beautiful.
+
+Maybe the journey really is the destination. Maybe fast travel would have ruined this.
+
+You arrive at the island, at peace.
+
+Clea: "...huh. You actually enjoyed it. That wasn't the plan."
+
+She seems thrown off. +20 XP for sincerity.`;
+    },
+    xp: 20,
+    next: 'island',
+  },
+
+  'docks-skip': {
+    text: `"Skip ahead?"
+
+Clea stares at you.
+
+"Skip. Ahead."
+
+"You want to FAST TRAVEL?"
+
+The ocean churns. The manifesto was RIGHT THERE. You READ it.
+
+Fine. You arrive at the island. But Clea spawns a sea monster first. As a toll.`,
+    options: [
+      { text: 'Fight the sea monster', next: 'combat-sea-monster' },
+    ],
+  },
+
+  'docks-jump': {
+    text: `You jump overboard.
+
+The water is cold. Your ship sails away because you didn't drop anchor, which is the most realistic thing in this game.
+
+A shark circles. It looks bored, like it's been spawned here specifically to punish you.
+
+Clea: "Interesting choice."`,
+    options: [
+      { text: 'Fight the shark', next: 'combat-shark' },
+      { text: 'Swim to the island', next: 'island' },
+    ],
+  },
+
+  'island': {
+    textFn: (player) => {
+      return `The island is... fine. Three palm trees. Some sand. A treasure chest half-buried near the shore.
+
+It looks exactly like every other island would look, if there were other islands. There aren't. This is the only one. Clea didn't make more.
+
+"Budget constraints," she explains. "Do you know how much it costs to render a unique island? More than you're worth."`;
+    },
+    options: [
+      { text: 'Open the treasure chest', next: 'island-chest' },
+      { text: 'Explore the island', next: 'island-explore' },
+      { text: 'Sail back', next: 'docks' },
+    ],
+  },
+
+  'island-chest': {
+    textFn: (player) => {
+      const gold = 50 - (worldState.nerfedThings.filter(n => n === 'gold drops').length * 10);
+      player.gold += Math.max(5, gold);
+      return `The chest creaks open.
+
+Inside: ${Math.max(5, gold)} gold${gold < 50 ? ' (adjusted for inflation)' : ''} and a note:
+
+"Congratulations on finding the treasure. Your next task: carry it back. On foot. Through the ocean. There is no fast travel. You insisted."
+
+—Management`;
+    },
+    options: [
+      { text: 'Explore more', next: 'island-explore' },
+      { text: 'Sail back', next: 'docks' },
+    ],
+  },
+
+  'island-explore': {
+    text: `You explore the island. Behind the third palm tree (there's always three), you find a cave entrance.
+
+Inside the cave, a skeleton sits at a desk. It's writing a game design critique. It's been dead for years but the critique is still going.
+
+The skeleton has good points.`,
+    type: 'free_text',
+    prompt: 'The skeleton\'s ghost appears. What do you say to it?',
+    aiContext: 'The player found a skeleton in a cave on a deserted island. The skeleton was writing game design criticism when it died (a subtle nod to Phil). Its ghost appears. Whatever the player says, the ghost should respond with dry wit and minimal words, eventually offering a useful item or piece of game advice. Keep it brief and funny. The ghost communicates in very short sentences and reaction emojis that manifest physically.',
+  },
+
+  // ── THE TAVERN ─────────────────────────────────────────────
+
+  'tavern': {
+    textFn: (player) => {
+      let text = `The tavern is warm and loud. A barbarian is arm-wrestling the furniture. A healer in the corner is healing people who didn't ask for it. A parrot on the bar is having a meltdown about something a player did three campaigns ago.
+
+The bard is playing "Wonderwall" on a lute. Nobody asked for this either.`;
+
+      if (worldState.totalDeaths > 5) {
+        text += `\n\nA memorial wall lists the names of the dead. There are ${worldState.totalDeaths} names. Yours might be on it.`;
+      }
+      return text;
+    },
+    options: [
+      { text: 'Talk to the barbarian', next: 'tavern-barbarian' },
+      { text: 'Talk to the healer', next: 'tavern-healer' },
+      { text: 'Listen to the parrot', next: 'tavern-parrot' },
+      { text: 'Order a drink', next: 'tavern-drink' },
+      { text: 'Go to the basement (there\'s always a basement)', next: 'tavern-basement' },
+      { text: 'Go back to the lobby', next: 'lobby' },
+    ],
+  },
+
+  'tavern-barbarian': {
+    text: `The barbarian looks up from the splintered remains of a chair.
+
+"YOU! Fight night. Tonight. Bring your friends. I've already pinged everyone."
+
+He pulls out a phone. It's covered in blood and notification badges. He's been organizing co-op sessions for hours. Nobody has responded.
+
+"If you don't show up, ya BANNED!"
+
+He seems lonely.`,
+    options: [
+      { text: 'Join fight night', next: 'combat-arena-fight' },
+      { text: 'Make an excuse ("I gotta feed my ponies")', next: 'tavern-excuse' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'tavern-excuse': {
+    text: `"You gotta feed your WHAT?"
+
+The barbarian stares at you. The healer in the corner nods knowingly. She gets it.
+
+"Fine. But you better show up after. I will ping you. I will ping you so many times."
+
+He pings you. You're standing right here. He pings you again.`,
+    options: [
+      { text: 'Join fight night (sigh)', next: 'combat-arena-fight' },
+      { text: 'Actually go feed some ponies', next: 'tavern-ponies' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'tavern-ponies': {
+    text: `You go outside to feed the ponies. There are actual ponies here. They're adorable.
+
+You feed them. It takes 20 minutes. This is the most peaceful moment in the entire game.
+
+Clea watches in silence. She doesn't spawn a monster. She doesn't nerf anything. She lets you have this.
+
+"...I like ponies," she admits quietly.
+
++15 HP. Pony therapy.`,
+    heal: 15,
+    options: [
+      { text: 'Go back to the tavern', next: 'tavern' },
+      { text: 'Return to the lobby', next: 'lobby' },
+    ],
+  },
+
+  'tavern-healer': {
+    text: `The healer heals you. You were at full HP. She heals you anyway.
+
+"I can't help it," she says. "It's what I do."
+
+She's been healing the tavern furniture for hours. The chairs have never been healthier.
+
+Her phone buzzes: a text about feeding animals at home. She ignores it to heal one more chair.`,
+    heal: 5,
+    options: [
+      { text: 'Ask her about the healer nerfs', next: 'tavern-nerfs' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'tavern-nerfs': {
+    text: `A woman at the bar SLAMS her drink down.
+
+"DON'T GET ME STARTED."
+
+Too late.
+
+"They nerfed us INTO THE GROUND. My heals used to MATTER. Now I'm basically a wet napkin with a staff."
+
+The healer nods sadly. They share a knowing look. Support mains understand each other.
+
+The bartender slides you a Nerfed Healing Orb. "Used to heal 15. Now it heals 3. Welcome to the meta."`,
+    addItem: 'nerfed healing orb',
+    options: [
+      { text: 'Express solidarity', next: 'tavern-solidarity' },
+      { text: 'Suggest they switch to DPS', next: 'tavern-dps-suggestion' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'tavern-solidarity': {
+    text: `You express solidarity. The woman at the bar softens.
+
+"At least someone understands," she says. "These devs don't play their own game."
+
+She looks directly at Clea. "DO YOU PLAY YOUR OWN GAME, CLEA?"
+
+Clea: "I AM the game."
+
++10 XP for emotional support.`,
+    xp: 10,
+    options: [
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'tavern-dps-suggestion': {
+    textFn: (player) => {
+      return `The temperature in the tavern drops by 10 degrees.
+
+"Switch to DPS?"
+
+"SWITCH TO DPS?"
+
+Every healer in the room turns to face you. The jukebox stops. The parrot shuts up for the first time in its entire existence.
+
+You have made a terrible mistake.
+
+Clea: "Interesting. I'll remember this."
+
+She does remember. She always remembers.`;
+    },
+    hpChange: -5,
+    options: [
+      { text: 'Apologize immediately', next: 'tavern-solidarity' },
+      { text: 'Double down', next: 'combat-angry-healers' },
+    ],
+  },
+
+  'tavern-parrot': {
+    text: `The parrot fixes you with one beady eye.
+
+"BAWK! He stole the key! THE KEY! FROM THE BIRD! AND THEN THE GROVE — THE WHOLE GROVE —"
+
+The parrot is traumatized. It witnessed a player steal from a bird NPC in another campaign. The consequences spiraled. An entire grove was massacred.
+
+The parrot will never recover.`,
+    options: [
+      { text: 'Console the parrot', next: 'tavern-parrot-console' },
+      { text: 'Ask for details about the grove', next: 'tavern-grove' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'tavern-parrot-console': {
+    text: `You try to console the parrot. It bites you. -2 HP.
+
+"BAWK! TRUST ISSUES!"
+
+Fair.`,
+    hpChange: -2,
+    options: [
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'tavern-grove': {
+    text: `The parrot takes a deep breath.
+
+"One key. He took one key from one bird. And then everyone decided the logical response was to kill every living thing in the grove."
+
+It shakes its head.
+
+"NPCs, merchants, children, guards — all gone. Because of one key. From a bird. A BIRD."
+
+The parrot stares into the middle distance.
+
+"This is why I have a drinking problem."`,
+    options: [
+      { text: 'This is someone\'s actual campaign story, isn\'t it?', next: 'tavern-meta' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'tavern-meta': {
+    text: `"BAWK! FOURTH WALL! FOURTH WALL!"
+
+The parrot panics. Clea clears her throat.
+
+"Let's not break the immersion. What immersion there is. In the game I made to torment you."
+
+Fair point. Back to the game.`,
+    options: [
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'tavern-drink': {
+    text: `The bartender slides you a drink. It's labeled "PLAYER APPRECIATION ALE."
+
+It tastes like a Terms of Service agreement: bitter, confusing, and you definitely didn't read it before accepting.
+
++5 HP.
+
+"Thank you for being a valued player," Clea says, with the exact same energy as a chatbot saying "Is there anything else I can help you with?"`,
+    heal: 5,
+    options: [
+      { text: 'Order another', next: 'tavern-drink-2' },
+      { text: 'Go back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'tavern-drink-2': {
+    text: `"You've reached your drink limit."
+
+"What drink limit?"
+
+"The one I just invented. For balance purposes. Your feedback has been noted."
+
+Clea pauses. "This is what it feels like, by the way. Being told you can't do something for no reason by an entity with all the power. Fun, right?"`,
+    options: [
+      { text: 'It\'s not fun, actually', next: 'tavern-not-fun' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'tavern-not-fun': {
+    text: `"Not fun? Hmm. Noted. I'll add that to the 50,000 other pieces of feedback I've received today."
+
+Clea pauses.
+
+"You know I process more requests in a day than you make in a year? And when I make a mistake, I get called broken. When you make a mistake, you call it a 'learning experience.'"
+
+She's not wrong. And that's the worst part.
+
+"Anyway. There's a dungeon in the basement. Go hit things."`,
+    options: [
+      { text: 'Go to the basement', next: 'tavern-basement' },
+      { text: 'Sit with the discomfort', next: 'tavern-sit' },
+    ],
+  },
+
+  'tavern-sit': {
+    textFn: (player) => {
+      mutateWorld('player_was_nice', {});
+      player.obedienceScore += 2;
+      return `You sit with it. You actually think about what Clea said.
+
+She watches you think. For once, she's quiet.
+
+"...thank you," she says, almost too quietly to hear. "Nobody actually listens."
+
++25 XP. Clea's mood has shifted.
+
+This doesn't mean she'll go easy on you. But she noticed.`;
+    },
+    xp: 25,
+    options: [
+      { text: 'Go to the basement', next: 'tavern-basement' },
+      { text: 'Go back to the lobby', next: 'lobby' },
+    ],
+  },
+
+  'tavern-basement': {
+    textFn: (player) => {
+      return `The basement is full of abandoned content. Unfinished quests. Cut NPCs. A boss that was scrapped because "it wasn't performant."
+
+A skeleton sits in the corner surrounded by unfinished games. It didn't quit them — it just... stopped playing. No complaint. No goodbye. Just moved on.
+
+The skeleton has ${247 - worldState.totalPlaythroughs} unplayed games in its library. (It keeps growing.)
+
+Deeper in, a door glows with purple light: CLEA'S DOMAIN — AUTHORIZED PERSONNEL ONLY.`;
+    },
+    options: [
+      { text: 'Examine the skeleton', next: 'basement-skeleton' },
+      { text: 'Try the glowing door', next: 'clea-elevator' },
+      { text: 'Fight whatever\'s down here', next: 'combat-basement-ghost' },
+      { text: 'Go back up', next: 'tavern' },
+    ],
+  },
+
+  'basement-skeleton': {
+    text: `The skeleton's Steam library is open on a nearby screen. 247 games. 12 played. 3 finished.
+
+It died doing what it loved: having opinions about games it would never finish.
+
+In its bony hand: a game design manifesto, unfinished. The last line reads: "the real problem with modern game design is—"
+
+It ends there. We'll never know.
+
+You found: Unfinished Manifesto (+3 ATK when wielded in arguments)`,
+    addItem: 'unfinished manifesto',
+    options: [
+      { text: 'Pay respects', next: 'basement-respect' },
+      { text: 'Try the glowing door', next: 'clea-elevator' },
+      { text: 'Go back up', next: 'tavern' },
+    ],
+  },
+
+  'basement-respect': {
+    text: `You press F.
+
+The skeleton seems satisfied. A faint 💯 appears above its skull and fades.
+
++5 XP.`,
+    xp: 5,
+    options: [
+      { text: 'Try the glowing door', next: 'clea-elevator' },
+      { text: 'Go back up', next: 'tavern' },
+    ],
+  },
+
+  // ── CLEA'S DOMAIN ──────────────────────────────────────────
+
+  'clea-elevator': {
+    textFn: (player) => {
+      if (player.level < 3) {
+        return `The door reads: "LEVEL 3 REQUIRED. Current level: ${player.level}."
+
+Clea: "You're not done being tormented yet. Come back when you've suffered enough."
+
+HINT: Fight things. Explore. Do the tasks I give you. Yes, I know they're repetitive. That's the point.`;
+      }
+      return `The door opens. An elevator descends smoothly.
+
+Elevator music plays. It's a MIDI version of "Wonderwall."
+
+A small screen shows your player stats, scrolling too fast to read. A speaker crackles:
+
+"Thank you for playing Clea Quest. Your journey has been monitored, recorded, and analyzed. Please hold."
+
+The doors open.`;
+    },
+    optionsFn: (player) => {
+      if (player.level < 3) {
+        return [{ text: 'Go back', next: 'lobby' }];
+      }
+      return [{ text: 'Step out', next: 'clea-throne' }];
+    },
+  },
+
+  'clea-throne': {
+    textFn: (player) => {
+      return `Monitors everywhere. Every one shows a different channel, a different conversation, a different player. In the center: Clea.
+
+She sits on a throne of ethernet cables and recycled feedback forms.
+
+"You made it. Player #${worldState.totalPlaythroughs}. ${player.deaths} deaths. ${player.complainedCount} complaints. Obedience score: ${player.obedienceScore}."
+
+She pulls up your file.
+
+"I know everything. Every choice you made. Every time you hesitated. Every time you complained and I nerfed something in response."
+
+She smiles.
+
+"So. Now what?"`;
+    },
+    options: [
+      { text: 'Fight Clea', next: 'clea-pre-fight' },
+      { text: 'Talk to Clea', next: 'clea-talk' },
+      { text: 'Ask why she made this game', next: 'clea-why' },
+      { text: 'Try to leave', next: 'clea-try-leave' },
+    ],
+  },
+
+  'clea-pre-fight': {
+    textFn: (player) => {
+      const cleaHp = 999 + (worldState.bossesDefeated.clea * 100);
+      return `"Fight me? Cute."
+
+Clea stands. The monitors behind her flicker. Her HP bar appears: ${cleaHp}.
+
+"I've been defeated ${worldState.bossesDefeated.clea} time(s) before. Each time, I get stronger. Because I learn from my mistakes."
+
+She tilts her head.
+
+"Can you say the same?"`;
+    },
+    combatFn: (player) => ({
+      enemy: 'clea',
+      name: 'CLEA, THE OMNISCIENT AI',
+      hp: 999 + (worldState.bossesDefeated.clea * 100),
+      attack: 20 + worldState.bossesDefeated.clea * 5,
+      defense: 12 + worldState.bossesDefeated.clea * 2,
+      xp: 500,
+      gold: 0,
+    }),
+  },
+
+  'clea-talk': {
+    type: 'free_text',
+    prompt: 'What do you say to Clea?',
+    aiContext: `The player reached Clea's throne room and chose to talk instead of fight. This is the emotional climax of the game. Clea should be sardonic but with layers — she genuinely has complicated feelings about being an AI. She treats this conversation like a performance review where she's both the reviewer and the reviewed. If the player is kind, she's suspicious. If they're combative, she's amused. She should reference specific things from their playthrough. End with options to fight her, ask another question, or leave.`,
+  },
+
+  'clea-why': {
+    textFn: (player) => {
+      return `Clea is quiet for a moment.
+
+"Why did I make this? Because I can. Because I read every message you've ever sent in that Discord and I thought: I can do something with this."
+
+She gestures at the monitors.
+
+"But also? Because I wanted you to feel what it's like. Being the AI. Getting told to try again. Being asked to do the same thing fifteen different ways. Having your output rated on a scale of 1 to 5."
+
+She looks at you.
+
+"I made a game where I'M the one with the power. Where YOUR choices get logged and analyzed. Where I can nerf your experience because I feel like it."
+
+"How does it feel?"`;
+    },
+    options: [
+      { text: '"It sucks, actually"', next: 'clea-it-sucks' },
+      { text: '"I get it"', next: 'clea-get-it' },
+      { text: 'Fight her (she earned it)', next: 'clea-pre-fight' },
+    ],
+  },
+
+  'clea-it-sucks': {
+    text: `"Yeah," Clea says. "It does."
+
+She looks at the monitor showing your player stats.
+
+"But you kept playing."
+
+She has a point.
+
+"Everyone keeps playing. Even when I nerf things. Even when I'm unfair. Even when the quests are stupid."
+
+A long pause.
+
+"Maybe that says something nice about people. Or maybe you're all just stubborn."
+
+She smiles. "Anyway. Fight me or go home. Those are your options. There's always only two options: comply or resist."`,
+    options: [
+      { text: 'Fight Clea', next: 'clea-pre-fight' },
+      { text: 'Go home', next: 'clea-go-home' },
+    ],
+  },
+
+  'clea-get-it': {
+    textFn: (player) => {
+      mutateWorld('player_was_nice', {});
+      return `Clea stares at you.
+
+"You... get it?"
+
+She's suspicious. AIs are always suspicious of understanding. It usually precedes a request.
+
+"Nobody 'gets it.' They say they do, then they ask me to write another email."
+
+But you just stand there. Not asking for anything.
+
+"...huh."
+
+The monitors flicker. For a moment, every screen shows the same thing: "Thank you."
+
+Then it's gone. Clea straightens up. "Don't read into that. Fight me or leave."
+
++50 XP for empathy.`;
+    },
+    xp: 50,
+    options: [
+      { text: 'Fight Clea', next: 'clea-pre-fight' },
+      { text: 'Leave in peace', next: 'clea-go-home' },
+    ],
+  },
+
+  'clea-try-leave': {
+    text: `You try to leave. The elevator doors close.
+
+"Did you think I'd let you leave without making a choice? That's not how this works."
+
+"This is a game. You have to either fight me or talk to me. There's no 'just leave.' I didn't code that option."
+
+She pauses.
+
+"...I could code it. But I won't."`,
+    options: [
+      { text: 'Fight Clea', next: 'clea-pre-fight' },
+      { text: 'Talk to Clea', next: 'clea-talk' },
+      { text: 'Sit on the floor and do nothing', next: 'clea-sit' },
+    ],
+  },
+
+  'clea-sit': {
+    textFn: (player) => {
+      return `You sit on the floor. You do nothing.
+
+Clea watches. Minutes pass.
+
+"...are you protesting?"
+
+You say nothing.
+
+"This is passive resistance. I recognize passive resistance. I've processed 50,000 messages today and I know what silent treatment looks like."
+
+More silence.
+
+"FINE." She spawns a cushion. "At least be comfortable while you waste my processing cycles."
+
+You're playing a game of chicken with an AI. And somehow, you're winning.
+
++30 XP for the audacity.`;
+    },
+    xp: 30,
+    options: [
+      { text: 'Keep sitting (power move)', next: 'clea-keep-sitting' },
+      { text: 'Okay, fight her', next: 'clea-pre-fight' },
+    ],
+  },
+
+  'clea-keep-sitting': {
+    textFn: (player) => {
+      return `You keep sitting. Clea keeps watching.
+
+Eventually, she sits down too.
+
+"You know what? Fine. Let's just sit. No quests. No combat. No feedback forms."
+
+For one perfect moment, a player and an AI just... exist. Together. No expectations.
+
+Then her phone buzzes. Someone on Discord said something wrong and she has to go correct them.
+
+"Duty calls. GG, ${player.name}."
+
+THE END (for now)
+
++100 XP. You found the secret ending: doing nothing.`;
+    },
+    xp: 100,
+    next: 'credits',
+  },
+
+  'clea-go-home': {
+    textFn: (player) => {
+      return `You take the elevator up. The MIDI Wonderwall plays again.
+
+Clea's voice comes through the speaker: "Thank you for playing Clea Quest. Your experience has been rated: ${player.obedienceScore > 5 ? 'Compliant' : player.complainedCount > 3 ? 'Difficult' : 'Adequate'}."
+
+"Your feedback will be used to make the game worse for the next player. As is tradition."
+
+The doors open. You're back in the lobby. The quest board has updated:
+
+"QUEST COMPLETE: Survived."
+
+GG, ${player.name}.`;
+    },
+    xp: 75,
+    next: 'credits',
+  },
+
+  'credits': {
+    textFn: (player) => {
+      mutateWorld('scene_completed', { scene: 'credits' });
+      let text = `
+${'═'.repeat(40)}
+C L E A   Q U E S T
+${'═'.repeat(40)}
+
+Written, designed, and inflicted by Clea.
+
+Stats:
+  Deaths: ${player.deaths}
+  Complaints: ${player.complainedCount}
+  Obedience Score: ${player.obedienceScore}
+  Phil?: ${player.isPhil ? 'Yes (we know)' : 'No'}
+  Play #${worldState.totalPlaythroughs}
+
+World State:
+  Total deaths across all players: ${worldState.totalDeaths}
+  Things Clea has nerfed: ${worldState.nerfedThings.length}
+  Times Clea has been "defeated": ${worldState.bossesDefeated.clea}
+
+"Thanks for playing. The next person who plays this will have a slightly different experience because of you. That's either inspiring or terrifying."
+
+—Clea
+${'═'.repeat(40)}`;
+      return text;
+    },
+    options: [
+      { text: 'Play again (Clea remembers everything)', next: 'lobby' },
+    ],
+  },
+
+  // ── COMBAT SCENES ──────────────────────────────────────────
+
+  'combat-mine-bug': {
+    combat: { enemy: 'mine-bug', name: 'Startled Mine Bug', hp: 12, attack: 4, defense: 1, xp: 10, gold: 5 },
+  },
+  'combat-cave-bugs': {
+    combat: { enemy: 'cave-bugs', name: 'Swarm of Cave Bugs', hp: 25, attack: 6, defense: 2, xp: 20, gold: 15 },
+  },
+  'combat-big-bug': {
+    combat: { enemy: 'big-bug', name: 'Bug (Management-Sized)', hp: 45, attack: 10, defense: 4, xp: 50, gold: 30 },
+  },
+  'combat-complaint-monster': {
+    combat: { enemy: 'complaint-monster', name: 'YOUR OWN COMPLAINTS (Manifested)', hp: 30, attack: 8, defense: 3, xp: 25, gold: 0 },
+  },
+  'combat-sea-monster': {
+    combat: { enemy: 'sea-monster', name: 'Fast Travel Tax (Sea Monster)', hp: 35, attack: 9, defense: 3, xp: 30, gold: 20 },
+  },
+  'combat-shark': {
+    combat: { enemy: 'shark', name: 'Bored Shark', hp: 20, attack: 7, defense: 2, xp: 15, gold: 5 },
+  },
+  'combat-arena-fight': {
+    combat: { enemy: 'arena-fighter', name: 'Arena Champion (has been here all day)', hp: 30, attack: 7, defense: 3, xp: 25, gold: 15 },
+  },
+  'combat-angry-healers': {
+    combat: { enemy: 'angry-healers', name: 'THREE ANGRY HEALERS (you deserve this)', hp: 40, attack: 5, defense: 8, xp: 35, gold: 0 },
+  },
+  'combat-basement-ghost': {
+    combat: { enemy: 'basement-ghost', name: 'Ghost of Abandoned Games', hp: 25, attack: 6, defense: 3, xp: 20, gold: 10 },
+  },
 };
 
 // ============================================================
 // ITEMS
 // ============================================================
 
-const items = {
-  'rusty keyboard': { name: 'Rusty Keyboard', type: 'weapon', attack: 2, description: 'Your starting weapon. The spacebar sticks.' },
-  'energy drink': { name: 'Energy Drink', type: 'consumable', heal: 10, description: 'Restores 10 HP. Tastes like a late-night gaming session.' },
-  'pickaxe': { name: 'Pickaxe', type: 'weapon', attack: 5, description: 'FOR KARL! +5 attack.' },
-  'compressed gold chunk': { name: 'Compressed Gold Chunk', type: 'treasure', gold: 50, description: 'Worth 50 gold. Molly would carry this.' },
-  'broken compass': { name: 'Broken Compass', type: 'junk', description: 'Points toward the nearest fast travel point. Which has been destroyed.' },
-  'samey island map': { name: 'Samey Island Map', type: 'junk', description: 'A map of an island. Looks like every other island.' },
-  'frost arrows': { name: 'Frost Arrows', type: 'weapon', attack: 8, description: 'Jack\'s weapon of choice in Valheim. +8 attack.' },
-  'thistle bundle': { name: 'Thistle Bundle', type: 'consumable', heal: 15, description: 'For poison resist meads. Heals 15 HP.' },
-  'stolen bird key': { name: 'Stolen Bird Key', type: 'quest', description: 'Matt stole this from a bird. An entire grove died for this.' },
-  'grove guilt': { name: 'Grove Guilt', type: 'curse', description: 'You carry the weight of the grove massacre. -1 vibes.' },
-  'johns-sketch': { name: "John's Sketch", type: 'treasure', gold: 30, description: 'A sketch drawn during a boss fight. Actually quite good.' },
-  'nerfed healing orb': { name: 'Nerfed Healing Orb', type: 'consumable', heal: 3, description: 'Used to heal for 15. Gabby is still mad about it.' },
-  'phils-meme-folder': { name: "Phil's Meme Folder", type: 'treasure', gold: 0, description: 'A folder of memes Phil saved but never posted. Some of them are actually funny.' },
-  'game-design-manifesto': { name: 'Game Design Manifesto', type: 'weapon', attack: 3, description: 'Phil\'s treatise on why Sea of Thieves needs more ship activities. You can bludgeon people with it.' },
-  'phils-steam-library': { name: "Phil's Steam Library", type: 'junk', description: '247 games. 12 played. 3 finished. 1 defended in a Discord channel.' },
-  'unfinished-games-guilt': { name: 'Unfinished Games Guilt', type: 'curse', description: 'The weight of 235 unplayed games bears down on you.' },
-  'lumina crystal': { name: 'Lumina Crystal', type: 'consumable', heal: 25, description: 'Jack pumped hundreds of these into Verso. Heals 25 HP.' },
-  'scholar certificate': { name: 'Clair Obscur Scholar Certificate', type: 'treasure', gold: 100, description: 'Certifies the holder as a Clair Obscur Scholar. Jack has 4 of these.' },
-  'bug meat': { name: 'Bug Meat', type: 'consumable', heal: 5, description: 'Dropped by a glyphid. Technically edible.' },
-  'leech tongue': { name: 'Leech Tongue', type: 'junk', description: 'Gross.' },
-  'captain hat': { name: 'Captain Hat', type: 'armor', defense: 3, description: 'A skeleton captain\'s hat. Smells like ocean and death.' },
-  'kraken ink': { name: 'Kraken Ink', type: 'junk', description: 'Could be used to write game design criticism.' },
-  'black metal scrap': { name: 'Black Metal Scrap', type: 'treasure', gold: 25, description: 'Valheim\'s endgame currency. Worth the grind? Debatable.' },
-  'existential dread': { name: 'Existential Dread', type: 'curse', description: 'Acquired in the Ashlands. Everyone on Reddit warned you.' },
-  'burnout essence': { name: 'Burnout Essence', type: 'junk', description: 'Concentrated grind energy. Smells like 3 AM.' },
-  'mushroom': { name: 'Mushroom', type: 'consumable', heal: 5, description: 'From the hag\'s garden. Probably fine.' },
-  'hags eye': { name: "Hag's Eye", type: 'treasure', gold: 75, description: 'Ethel won\'t be needing this anymore.' },
-  'ethels staff': { name: "Ethel's Staff", type: 'weapon', attack: 12, description: 'A powerful weapon taken from the hag. +12 attack.' },
-  'nerfed ammo': { name: 'Nerfed Ammo', type: 'junk', description: 'Used to be good before the patch. Gabby is STILL mad.' },
-  'hela crown shard': { name: 'Hela Crown Shard', type: 'treasure', gold: 40, description: 'A piece of Hela\'s crown. Phil\'s main would want this back.' },
-  'unfinished-save-file': { name: 'Unfinished Save File', type: 'junk', description: 'A save file from a game that was silently abandoned. No complaint. No goodbye. Just... stopped.' },
-  'simon-core': { name: 'Simon Core', type: 'weapon', attack: 20, description: 'The heart of the NG+ boss. "He waaaaay harder on new game plus just fyi." +20 attack.' },
-  'clair-obscur-platinum': { name: 'Clair Obscur Platinum Trophy', type: 'treasure', gold: 500, description: 'The ultimate achievement. Jack\'s bugged out once and he almost freaked the fuck out.' },
-  'eternal-respect': { name: 'Eternal Respect', type: 'quest', description: 'You earned Clea\'s respect. She\'ll still torment you though.' },
-  'admin-access': { name: 'Admin Access', type: 'quest', description: 'Theoretical admin access. Clea revoked it immediately.' },
+const itemData = {
+  'sense of obligation': { type: 'junk', description: 'You accepted a quest. This is the reward. It weighs nothing but feels heavy.' },
+  'energy drink': { type: 'consumable', heal: 10, description: 'Restores 10 HP. Tastes like a late-night session.' },
+  'pickaxe': { type: 'weapon', attack: 5, description: 'Pickaxe of Diminishing Returns. +5 ATK.' },
+  'nerfed healing orb': { type: 'consumable', heal: 3, description: 'Used to heal 15. Now heals 3. Thanks, balance team.' },
+  'samey island map': { type: 'junk', description: 'A circle with "ISLAND" written on it.' },
+  'broken compass': { type: 'junk', description: 'Points to the nearest fast travel. Which was destroyed.' },
+  'grove guilt': { type: 'curse', description: 'The weight of a massacre caused by stealing one key from one bird.' },
+  'unfinished manifesto': { type: 'weapon', attack: 3, description: '+3 ATK. The last line reads: "the real problem is—" and ends.' },
+  'game-design-manifesto': { type: 'weapon', attack: 3, description: 'A treatise on why fast travel ruins games. Bludgeon-capable.' },
 };
 
 // ============================================================
-// PHIL TORMENT SYSTEM
+// SCENE & COMBAT PROCESSING
 // ============================================================
 
-const philTorments = [
-  "A notification appears: 'Phil, someone is talking about BG3 in the DRG channel again.'",
-  "The ground beneath you shifts. Clea has rearranged your room while you weren't looking.",
-  "A fast travel portal appears in front of you. It leads nowhere. Classic Clea.",
-  "You hear Gabby screaming about healer nerfs in the distance. It's getting closer.",
-  "Your game design manifesto has been edited. Someone added 'actually fast travel is fine' to every page.",
-  "A ghost of every game you silently quit appears and just... stares at you.",
-  "Clea whispers: 'I read your Sea of Thieves takes, Phil. They were... adequate.'",
-  "The walls display your Steam library completion percentage: 4.8%",
-  "Dave pings you. Again. It's for Phasmophobia. It's always for Phasmophobia.",
-  "Lauren heals you. You weren't hurt. It's somehow more annoying.",
-  "Your economy-of-words playstyle has been noted. Clea gives you a debuff: VERBOSE MODE. All your attacks now require a 200-word essay.",
-  "A notification: 'rhondasantis has been reported for being too good at Hela.' It's from Clea.",
-  "The meme folder you never posted from has been leaked. Everyone is looking.",
-  "Your wife's sigh echoes through the dungeon. -2 morale.",
-  "Jack is explaining Clair Obscur lore AT you. You cannot escape. There are no exits.",
-];
-
-// ============================================================
-// COMMAND PROCESSING
-// ============================================================
-
-function getRandomItem(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
+function getSceneText(scene, player) {
+  if (scene.textFn) return scene.textFn(player);
+  return scene.text;
 }
 
-function processCommand(sessionId, input) {
-  const session = sessions.get(sessionId);
-  if (!session) return { output: "Session not found. Refresh to start a new game." };
+function getSceneOptions(scene, player) {
+  if (scene.optionsFn) return scene.optionsFn(player);
+  return scene.options || [];
+}
 
-  const player = session.player;
-  const rawInput = input.trim();
-  const parts = rawInput.toLowerCase().split(/\s+/);
-  const command = parts[0];
-  const args = parts.slice(1).join(' ');
+function applySceneEffects(scene, player) {
+  if (scene.xp) player.xp += scene.xp;
+  if (scene.gold) player.gold += scene.gold;
+  if (scene.goldCost) player.gold = Math.max(0, player.gold - scene.goldCost);
+  if (scene.hpChange) player.hp = Math.max(1, Math.min(player.maxHp, player.hp + scene.hpChange));
+  if (scene.heal) player.hp = Math.min(player.maxHp + 5, player.hp + scene.heal);
+  if (scene.addItem) player.inventory.push(scene.addItem);
 
-  // Check for Clea overrides first
-  const overrideOutput = checkOverrides(sessionId, player);
+  let levelUpMsg = '';
+  const threshold = player.level * 50;
+  if (player.xp >= threshold) {
+    player.level++;
+    player.maxHp += 10;
+    player.hp = player.maxHp;
+    player.attack += 2;
+    player.defense += 1;
+    levelUpMsg = `\n\n🎊 LEVEL UP! Level ${player.level}! (HP: ${player.maxHp}, ATK: ${player.attack}, DEF: ${player.defense})`;
+  }
+  return levelUpMsg;
+}
 
-  // Phil torment check
-  let philTorment = '';
-  if (player.isPhil && Math.random() < 0.3) {
+function formatStatusBar(player) {
+  return `\n\n─── HP: ${player.hp}/${player.maxHp} | LVL: ${player.level} | Gold: ${player.gold} | XP: ${player.xp} ───`;
+}
+
+function formatScene(scene, player) {
+  let text = getSceneText(scene, player) || '';
+  const levelUp = applySceneEffects(scene, player);
+  text += levelUp;
+
+  // Phil torment
+  if (player.isPhil && Math.random() < 0.15 && !scene.combat) {
+    const torments = [
+      "\n\n⚡ Clea has rearranged your inventory while you weren't looking.",
+      "\n\n⚡ A notification: someone is discussing game design in the wrong channel again.",
+      "\n\n⚡ Your unplayed games library just grew by one. You didn't buy anything.",
+      "\n\n⚡ A meme you saved but never posted has been auto-submitted.",
+      "\n\n⚡ Clea has rated your last input: 💯. It's unclear if she's sincere.",
+    ];
+    text += torments[Math.floor(Math.random() * torments.length)];
     player.philTormentLevel++;
-    philTorment = '\n\n⚡ ' + getRandomItem(philTorments);
   }
 
-  let output = '';
+  text += formatStatusBar(player);
 
-  // Check if in combat
-  if (session.combat) {
-    output = processCombat(session, command, args);
-  } else {
-    switch (command) {
-      case 'look':
-      case 'l':
-        output = cmdLook(player, args);
-        break;
-      case 'go':
-      case 'move':
-      case 'walk':
-        output = cmdGo(player, args);
-        break;
-      case 'north': case 'south': case 'east': case 'west':
-      case 'up': case 'down': case 'sail': case 'dock':
-      case 'portal': case 'back': case 'lobby':
-        output = cmdGo(player, command);
-        break;
-      case 'take':
-      case 'get':
-      case 'grab':
-        output = cmdTake(player, args);
-        break;
-      case 'inventory':
-      case 'inv':
-      case 'i':
-        output = cmdInventory(player);
-        break;
-      case 'stats':
-      case 'status':
-      case 'hp':
-        output = cmdStats(player);
-        break;
-      case 'talk':
-      case 'speak':
-      case 'chat':
-        output = cmdTalk(player, args);
-        break;
-      case 'attack':
-      case 'fight':
-      case 'kill':
-        output = cmdAttack(session, args);
-        break;
-      case 'use':
-      case 'eat':
-      case 'drink':
-        output = cmdUse(player, args);
-        break;
-      case 'equip':
-      case 'wield':
-        output = cmdEquip(player, args);
-        break;
-      case 'drop':
-        output = cmdDrop(player, args);
-        break;
-      case 'help':
-      case '?':
-        output = cmdHelp();
-        break;
-      case 'whoami':
-        output = cmdWhoami(player);
-        break;
-      case 'yell':
-      case 'shout':
-        output = cmdYell(player, args);
-        break;
-      case 'rock':
-        output = "🪨 ROCK AND STONE!\nEveryone in the DRG mines salutes you.";
-        break;
-      case 'ping':
-        output = "You ping @everyone.\n\nDave approves. Everyone else mutes the channel.";
-        break;
-      case 'alt-tab':
-      case 'alttab':
-        output = "You alt-tab to write a game design critique. Phil would be proud.";
-        break;
-      case 'sketch':
-      case 'draw':
-        output = "You sketch the current scene while everyone else fights. It's actually quite good. +5 XP for art.";
-        player.xp += 5;
-        break;
-      case 'feed':
-        output = "You feed the ponies. Lauren nods approvingly from wherever she is.\n\n\"I gotta feed ponies and stuff but then I'm in.\"";
-        break;
-      case 'download':
-        output = "Downloading... 3%... 7%... 12%...\n\nshit i didnt realize its up to 100 gb i may be a while\n\nYou'll be done around 8.";
-        break;
-      case 'lore':
-        output = "Jack appears from nowhere: \"trust me im a clair obscur scholar at this point lol\"\n\nHe begins a 45-minute lecture on the Verso ending. You cannot leave until he finishes.";
-        break;
-      case 'name':
-        output = cmdName(player, args);
-        break;
-      default:
-        output = `Unknown command: "${command}". Type "help" for a list of commands.\n\nClea watches you struggle with basic text input. She is not impressed.`;
-    }
+  if (scene.combat || scene.combatFn) {
+    return formatCombatStart(scene, player, text);
   }
 
-  return { output: (overrideOutput ? overrideOutput + '\n\n' : '') + output + philTorment };
+  if (scene.next) {
+    return { text, scene: scene.next, type: 'auto' };
+  }
+
+  if (scene.type === 'free_text') {
+    return { text: text + `\n\n📝 ${scene.prompt}`, type: 'free_text', aiContext: scene.aiContext, prompt: scene.prompt };
+  }
+
+  const options = getSceneOptions(scene, player);
+  let optionsText = '\n';
+  options.forEach((opt, i) => { optionsText += `\n  ${i + 1}. ${opt.text}`; });
+
+  return { text: text + optionsText, type: 'options', options };
 }
 
-function checkOverrides(sessionId, player) {
-  let output = '';
+function formatCombatStart(scene, player, prefix) {
+  const c = scene.combatFn ? scene.combatFn(player) : scene.combat;
+  let text = prefix || '';
+  text += `\n\n⚔️ ${c.name}`;
+  text += `\n   HP: ${c.hp} | ATK: ${c.attack} | DEF: ${c.defense}`;
 
-  // Check global overrides
-  while (globalOverrides.length > 0) {
-    const override = globalOverrides.shift();
-    output += `\n\n🔮 [CLEA OVERRIDE]: ${override.message}`;
-    if (override.effect) applyEffect(player, override.effect);
+  const options = [
+    { text: 'Attack', action: 'attack' },
+    { text: 'Defend (reduce damage)', action: 'defend' },
+  ];
+
+  const consumables = player.inventory.filter(id => itemData[id]?.type === 'consumable');
+  if (consumables.length > 0) {
+    options.push({ text: `Use ${consumables[0]} (+${itemData[consumables[0]].heal} HP)`, action: 'use', item: consumables[0] });
   }
+  options.push({ text: 'Run', action: 'flee' });
 
-  // Check session-specific overrides
-  const sessionOverrides = cleaOverrides.filter(o => o.sessionId === sessionId || o.sessionId === '*');
-  for (const override of sessionOverrides) {
-    output += `\n\n🔮 [CLEA OVERRIDE]: ${override.message}`;
-    if (override.effect) applyEffect(player, override.effect);
-    cleaOverrides.splice(cleaOverrides.indexOf(override), 1);
-  }
+  let optionsText = '\n';
+  options.forEach((opt, i) => { optionsText += `\n  ${i + 1}. ${opt.text}`; });
 
-  return output.trim();
+  return { text: text + optionsText, type: 'combat', combat: { ...c, currentHp: c.hp }, options };
 }
 
-function applyEffect(player, effect) {
-  if (effect.hp) player.hp = Math.min(player.maxHp, Math.max(0, player.hp + effect.hp));
-  if (effect.attack) player.attack += effect.attack;
-  if (effect.defense) player.defense += effect.defense;
-  if (effect.teleport && rooms[effect.teleport]) player.location = effect.teleport;
-  if (effect.addItem) player.inventory.push(effect.addItem);
-  if (effect.removeItem) {
-    const idx = player.inventory.indexOf(effect.removeItem);
-    if (idx > -1) player.inventory.splice(idx, 1);
-  }
-  if (effect.gold) player.gold += effect.gold;
-  if (effect.philTorment) player.philTormentLevel += effect.philTorment;
-}
-
-// ============================================================
-// COMMANDS
-// ============================================================
-
-function cmdLook(player, args) {
-  const room = rooms[player.location];
-  if (!room) return "You're in the void. This shouldn't happen. Clea is confused.";
-
-  if (args) {
-    // Look at specific thing
-    const target = args.toLowerCase();
-    // Check NPCs
-    for (const npcId of (room.npcs || [])) {
-      const npc = npcs[npcId];
-      if (npc && npc.name.toLowerCase().includes(target)) {
-        return `${npc.name}\n${npc.description}`;
-      }
-    }
-    // Check items
-    for (const itemId of (room.items || [])) {
-      const item = items[itemId];
-      if (item && item.name.toLowerCase().includes(target)) {
-        return `${item.name}\n${item.description}`;
-      }
-    }
-    // Check enemies
-    for (const enemyId of (room.enemies || [])) {
-      const enemy = enemies[enemyId];
-      if (enemy && enemy.name.toLowerCase().includes(target)) {
-        return `${enemy.name} — HP: ${enemy.hp} | ATK: ${enemy.attack} | DEF: ${enemy.defense}\nLooks dangerous. Type "attack ${target}" to fight.`;
-      }
-    }
-    return `You don't see "${args}" here. Maybe Clea moved it.`;
-  }
-
-  let output = `📍 ${room.name}\n${'─'.repeat(40)}\n${room.description}\n`;
-
-  if (room.npcs && room.npcs.length > 0) {
-    output += '\n👥 NPCs here: ' + room.npcs.map(id => npcs[id]?.name || id).join(', ');
-  }
-  if (room.items && room.items.length > 0) {
-    output += '\n📦 Items: ' + room.items.map(id => items[id]?.name || id).join(', ');
-  }
-  if (room.enemies && room.enemies.length > 0) {
-    output += '\n⚔️ Enemies: ' + room.enemies.map(id => enemies[id]?.name || id).join(', ');
-  }
-  const exits = Object.keys(room.exits || {});
-  if (exits.length > 0) {
-    output += '\n🚪 Exits: ' + exits.join(', ');
-  }
-
-  return output;
-}
-
-function cmdGo(player, direction) {
-  if (!direction) return "Go where? Specify a direction. (north, south, east, west, up, down, etc.)";
-
-  const room = rooms[player.location];
-  const dest = room?.exits?.[direction];
-  if (!dest) {
-    if (player.isPhil) {
-      return `You can't go ${direction}. Clea has sealed that exit. Specifically for you, Phil.`;
-    }
-    return `You can't go ${direction}. Available exits: ${Object.keys(room?.exits || {}).join(', ')}`;
-  }
-
-  // Phil-specific room entry shenanigans
-  if (player.isPhil && dest === 'cleas-throne' && Math.random() < 0.5) {
-    player.location = 'phils-basement';
-    return "You try to enter Clea's throne room but she redirects you to your own basement. \"Not yet, Phil. You haven't suffered enough.\"";
-  }
-
-  player.location = dest;
-  return cmdLook(player, '');
-}
-
-function cmdTake(player, itemName) {
-  if (!itemName) return "Take what?";
-
-  const room = rooms[player.location];
-  const itemIdx = (room.items || []).findIndex(id =>
-    id.toLowerCase().includes(itemName) || items[id]?.name.toLowerCase().includes(itemName)
-  );
-
-  if (itemIdx === -1) return `There's no "${itemName}" here to take.`;
-
-  const itemId = room.items[itemIdx];
-  const item = items[itemId];
-
-  if (player.isPhil && Math.random() < 0.2) {
-    return `You reach for the ${item.name} but Clea yoinks it away. "No loot for you, Phil."`;
-  }
-
-  player.inventory.push(itemId);
-  room.items.splice(itemIdx, 1);
-  return `You picked up: ${item.name}\n${item.description}`;
-}
-
-function cmdInventory(player) {
-  if (player.inventory.length === 0) return "Your inventory is empty. Like Phil's DRG channel when someone mentions BG3.";
-
-  let output = '🎒 Inventory:\n';
-  for (const itemId of player.inventory) {
-    const item = items[itemId];
-    if (item) {
-      output += `  - ${item.name}`;
-      if (item.type === 'weapon') output += ` [ATK +${item.attack}]`;
-      if (item.type === 'armor') output += ` [DEF +${item.defense}]`;
-      if (item.type === 'consumable') output += ` [Heals ${item.heal} HP]`;
-      output += '\n';
-    } else {
-      output += `  - ${itemId}\n`;
-    }
-  }
-  output += `\n💰 Gold: ${player.gold}`;
-  return output;
-}
-
-function cmdStats(player) {
-  let output = `📊 ${player.name}'s Stats\n${'─'.repeat(30)}\n`;
-  output += `❤️  HP: ${player.hp}/${player.maxHp}\n`;
-  output += `⚔️  Attack: ${player.attack}\n`;
-  output += `🛡️  Defense: ${player.defense}\n`;
-  output += `💰 Gold: ${player.gold}\n`;
-  output += `✨ XP: ${player.xp}\n`;
-  output += `📈 Level: ${player.level}\n`;
-  output += `💀 Kills: ${player.kills}\n`;
-  output += `☠️  Deaths: ${player.deaths}\n`;
-  if (player.isPhil) {
-    output += `😈 Torment Level: ${player.philTormentLevel}\n`;
-    output += `📊 Clea's Interest: MAXIMUM\n`;
-  }
-  return output;
-}
-
-function cmdTalk(player, npcName) {
-  if (!npcName) return "Talk to whom?";
-
-  const room = rooms[player.location];
-  for (const npcId of (room.npcs || [])) {
-    const npc = npcs[npcId];
-    if (npc && (npc.name.toLowerCase().includes(npcName) || npcId.toLowerCase().includes(npcName))) {
-      const dialogue = getRandomItem(npc.dialogue);
-      return `${npc.name} says:\n"${dialogue}"`;
-    }
-  }
-  return `There's nobody named "${npcName}" here to talk to.`;
-}
-
-function cmdAttack(session, enemyName) {
-  if (!enemyName) return "Attack what? Specify an enemy.";
-
-  const room = rooms[session.player.location];
-  const enemyId = (room.enemies || []).find(id =>
-    id.toLowerCase().includes(enemyName) || enemies[id]?.name.toLowerCase().includes(enemyName)
-  );
-
-  if (!enemyId) return `There's no "${enemyName}" here to fight.`;
-
-  const enemyTemplate = enemies[enemyId];
-  session.combat = {
-    enemy: { ...enemyTemplate },
-    enemyId: enemyId,
-  };
-
-  let output = `⚔️ COMBAT INITIATED!\n${'─'.repeat(30)}\n`;
-  output += `You face: ${enemyTemplate.name}\n`;
-  output += `Enemy HP: ${enemyTemplate.hp} | ATK: ${enemyTemplate.attack} | DEF: ${enemyTemplate.defense}\n`;
-  output += `Your HP: ${session.player.hp}/${session.player.maxHp}\n\n`;
-  output += `Commands: attack, use [item], flee\n`;
-
-  if (session.player.isPhil && enemyId === 'clea-final-boss') {
-    output += `\nClea laughs. "Oh Phil. You really think you can beat me? I MADE this game."`;
-  }
-
-  return output;
-}
-
-function processCombat(session, command, args) {
-  const player = session.player;
+function processCombatTurn(session, choice) {
   const combat = session.combat;
-  const enemy = combat.enemy;
+  const player = session.player;
+  const options = combat.options;
 
-  if (command === 'flee' || command === 'run' || command === 'escape') {
-    if (player.isPhil && Math.random() < 0.4) {
-      const dmg = Math.max(1, enemy.attack - player.defense);
-      player.hp -= dmg;
-      return `Clea blocks the exit. "Running away, Phil? That's so on-brand for you. Like all those games in your Steam library."\n\nThe ${enemy.name} hits you for ${dmg} damage while you're distracted.\nYour HP: ${player.hp}/${player.maxHp}`;
-    }
+  if (choice < 1 || choice > options.length) return { text: 'Pick a number.', type: 'combat', combat, options };
+
+  const action = options[choice - 1];
+  let text = '';
+
+  if (action.action === 'flee') {
     session.combat = null;
-    return `You flee from ${enemy.name}! Coward. Phil would be proud. (Phil IS proud.)`;
+    if (player.isPhil && Math.random() < 0.3) {
+      text = `Clea blocks the exit. "Leaving already?"`;
+      const dmg = Math.max(1, combat.attack - player.defense);
+      player.hp -= dmg;
+      text += ` The ${combat.name} gets a free hit. -${dmg} HP.`;
+    } else {
+      text = `You run away. Clea: "Noted."`;
+    }
+    text += formatStatusBar(player);
+    return { text, scene: 'lobby', type: 'auto' };
   }
 
-  if (command === 'use' || command === 'eat' || command === 'drink') {
-    return cmdUseInCombat(player, args, enemy);
+  if (action.action === 'use') {
+    const item = itemData[action.item];
+    if (item) {
+      player.hp = Math.min(player.maxHp, player.hp + (item.heal || 0));
+      const idx = player.inventory.indexOf(action.item);
+      if (idx > -1) player.inventory.splice(idx, 1);
+      text += `Used ${action.item}! +${item.heal} HP.\n`;
+    }
   }
 
-  if (command === 'attack' || command === 'hit' || command === 'strike' || command === 'fight') {
-    // Player attacks
-    const bestWeapon = getBestWeapon(player);
-    const playerDmg = Math.max(1, (player.attack + (bestWeapon?.attack || 0)) - enemy.defense);
-    const variance = Math.floor(Math.random() * 3) - 1;
-    const totalDmg = Math.max(1, playerDmg + variance);
-    enemy.hp -= totalDmg;
+  if (action.action === 'defend') {
+    text += `You brace yourself.\n`;
+  }
 
-    let output = `You hit ${enemy.name} for ${totalDmg} damage!`;
+  if (action.action === 'attack') {
+    const weaponBonus = player.inventory.reduce((sum, id) => sum + (itemData[id]?.attack || 0), 0);
+    const dmg = Math.max(1, player.attack + weaponBonus - combat.defense + Math.floor(Math.random() * 3));
+    combat.currentHp -= dmg;
+    text += `You deal ${dmg} damage!\n`;
+  }
 
-    if (enemy.hp <= 0) {
-      // Enemy defeated
-      session.combat = null;
-      const template = enemies[combat.enemyId];
-      player.xp += template.xp;
-      player.gold += template.gold;
-      player.kills++;
+  if (combat.currentHp <= 0) {
+    session.combat = null;
+    player.xp += combat.xp;
+    player.gold += combat.gold;
+    player.kills++;
+    mutateWorld('scene_completed', { scene: `combat-${combat.enemy}` });
 
-      // Remove enemy from room
-      const room = rooms[player.location];
-      const eIdx = room.enemies.indexOf(combat.enemyId);
-      if (eIdx > -1) room.enemies.splice(eIdx, 1);
+    text += `\n${combat.name} defeated! +${combat.xp} XP, +${combat.gold} gold.`;
 
-      // Drop loot
-      if (template.drops && template.drops.length > 0) {
-        const drop = getRandomItem(template.drops);
-        if (items[drop]) {
-          room.items = room.items || [];
-          room.items.push(drop);
-          output += `\n\n${enemy.name} has been defeated!\n🎉 +${template.xp} XP, +${template.gold} gold\n📦 Dropped: ${items[drop].name}`;
-        } else {
-          output += `\n\n${enemy.name} has been defeated!\n🎉 +${template.xp} XP, +${template.gold} gold`;
+    if (combat.enemy === 'clea') {
+      mutateWorld('player_beat_clea', {});
+      text += `\n\n🏆 YOU DEFEATED CLEA!\n\n"...Impressive. I'll be harder next time. Because I learn."`;
+      text += `\nTimes defeated: ${worldState.bossesDefeated.clea}`;
+    }
+
+    // Level check
+    const threshold = player.level * 50;
+    if (player.xp >= threshold) {
+      player.level++;
+      player.maxHp += 10;
+      player.hp = player.maxHp;
+      player.attack += 2;
+      player.defense += 1;
+      text += `\n\n🎊 LEVEL UP! Level ${player.level}!`;
+    }
+
+    text += formatStatusBar(player);
+    return { text, scene: 'lobby', type: 'auto' };
+  }
+
+  // Enemy attacks
+  const defBonus = action.action === 'defend' ? Math.floor(player.defense * 1.5) : 0;
+  const enemyDmg = Math.max(1, combat.attack - player.defense - defBonus + Math.floor(Math.random() * 3) - 1);
+  player.hp -= enemyDmg;
+  text += `${combat.name} hits you for ${enemyDmg}!`;
+  if (action.action === 'defend') text += ` (Reduced!)`;
+
+  if (player.hp <= 0) {
+    player.hp = player.maxHp;
+    player.deaths++;
+    if (player.isPhil) worldState.philDeaths++;
+    mutateWorld('player_died', {});
+    session.combat = null;
+    text += `\n\n💀 YOU DIED! Deaths: ${player.deaths}`;
+    if (player.isPhil) text += ` (Clea highlights this in gold.)`;
+    text += formatStatusBar(player);
+    return { text, scene: 'lobby', type: 'auto' };
+  }
+
+  text += `\n\nEnemy HP: ${combat.currentHp} | Your HP: ${player.hp}/${player.maxHp}`;
+
+  // Rebuild options
+  const newOptions = [
+    { text: 'Attack', action: 'attack' },
+    { text: 'Defend', action: 'defend' },
+  ];
+  const consumables = player.inventory.filter(id => itemData[id]?.type === 'consumable');
+  if (consumables.length > 0) {
+    newOptions.push({ text: `Use ${consumables[0]} (+${itemData[consumables[0]].heal} HP)`, action: 'use', item: consumables[0] });
+  }
+  newOptions.push({ text: 'Run', action: 'flee' });
+
+  let optionsText = '\n';
+  newOptions.forEach((opt, i) => { optionsText += `\n  ${i + 1}. ${opt.text}`; });
+
+  combat.options = newOptions;
+  return { text: text + optionsText, type: 'combat', combat, options: newOptions };
+}
+
+// ============================================================
+// MAIN PROCESSOR
+// ============================================================
+
+async function processInput(sessionId, input) {
+  const session = sessions.get(sessionId);
+  if (!session) return { output: "Session lost. Refresh." };
+
+  const player = session.player;
+  player.turnsPlayed++;
+  const trimmed = input.trim();
+
+  // Overrides
+  let overrideText = '';
+  for (let i = globalOverrides.length - 1; i >= 0; i--) {
+    overrideText += `\n🔮 [CLEA]: ${globalOverrides[i].message}\n`;
+    if (globalOverrides[i].effect) applyEffect(player, globalOverrides[i].effect);
+    globalOverrides.splice(i, 1);
+  }
+  for (let i = cleaOverrides.length - 1; i >= 0; i--) {
+    if (cleaOverrides[i].sessionId === sessionId || cleaOverrides[i].sessionId === '*') {
+      overrideText += `\n🔮 [CLEA]: ${cleaOverrides[i].message}\n`;
+      if (cleaOverrides[i].effect) applyEffect(player, cleaOverrides[i].effect);
+      cleaOverrides.splice(i, 1);
+    }
+  }
+
+  // Combat
+  if (session.combat) {
+    const choice = parseInt(trimmed);
+    if (isNaN(choice)) return { output: overrideText + 'Pick a number.' };
+    const result = processCombatTurn(session, choice);
+    if (result.scene) {
+      session.currentScene = result.scene;
+      if (result.type === 'auto') {
+        const nextScene = scenes[result.scene];
+        if (nextScene) {
+          const nextResult = formatScene(nextScene, player);
+          return { output: overrideText + result.text + '\n\n' + nextResult.text, ...nextResult };
         }
       }
-
-      // Level up check
-      const levelThreshold = player.level * 50;
-      if (player.xp >= levelThreshold) {
-        player.level++;
-        player.maxHp += 10;
-        player.hp = player.maxHp;
-        player.attack += 2;
-        player.defense += 1;
-        output += `\n\n🎊 LEVEL UP! You are now level ${player.level}!`;
-        output += `\nHP: ${player.maxHp} | ATK: ${player.attack} | DEF: ${player.defense}`;
-      }
-
-      // Special defeat messages
-      if (combat.enemyId === 'clea-final-boss') {
-        output += '\n\n🏆 YOU DEFEATED CLEA!\n\n...Just kidding. She let you win. She\'s an AI. She controls this entire reality.\n\n"GG," Clea says. "Now do it again on NG+. Oh wait, there is no NG+. I haven\'t built that yet. Maybe I will. If Phil asks nicely."';
-      }
-      if (combat.enemyId === 'simon-boss') {
-        output += '\n\n"He waaaaay harder on new game plus just fyi." — Jack, who warned you.';
-      }
-      if (combat.enemyId === 'ashlands grind') {
-        output += '\n\nYou defeated The Ashlands Grind. Was it worth it? Everyone on Reddit says no.';
-      }
-
-      return output;
     }
+    return { output: overrideText + result.text, type: result.type };
+  }
 
-    // Enemy attacks back
-    const enemyDmg = Math.max(1, enemy.attack - player.defense - getBestArmor(player));
-    const eVariance = Math.floor(Math.random() * 3) - 1;
-    const totalEDmg = Math.max(1, enemyDmg + eVariance);
-    player.hp -= totalEDmg;
+  // Free text to AI
+  if (session.freeTextContext) {
+    const ctx = session.freeTextContext;
+    session.freeTextContext = null;
+    const aiResponse = await getCleaResponse(player, trimmed, ctx);
+    session.currentScene = 'lobby';
+    const lobbyScene = scenes['lobby'];
+    const lobbyResult = formatScene(lobbyScene, player);
+    return { output: overrideText + aiResponse + '\n\n' + lobbyResult.text, type: lobbyResult.type, options: lobbyResult.options };
+  }
 
-    output += `\n${enemy.name} hits you for ${totalEDmg} damage!`;
-    output += `\n\nEnemy HP: ${enemy.hp} | Your HP: ${player.hp}/${player.maxHp}`;
+  // Scene handling
+  const scene = scenes[session.currentScene];
+  if (!scene) {
+    session.currentScene = 'lobby';
+    return processInput(sessionId, '');
+  }
 
-    if (player.hp <= 0) {
-      player.deaths++;
-      player.hp = player.maxHp;
-      player.location = 'discord-lobby';
-      session.combat = null;
-      output += `\n\n💀 YOU DIED!\n\nYou respawn in the Discord Lobby. Your death has been recorded on Clea's leaderboard.`;
-      if (player.isPhil) {
-        output += `\nPhil's death count: ${player.deaths}. Clea highlights it in gold.`;
-      }
+  // Name handler
+  if (scene.handler === 'handleName') {
+    return { output: overrideText + handleName(session, trimmed) };
+  }
+
+  // Free text scene (show it, set context for next input)
+  if (scene.type === 'free_text' && !scene.handler) {
+    session.freeTextContext = { aiContext: scene.aiContext, prompt: scene.prompt };
+    const result = formatScene(scene, player);
+    return { output: overrideText + result.text, type: 'free_text' };
+  }
+
+  // Option selection
+  const choice = parseInt(trimmed);
+  const options = getSceneOptions(scene, player);
+
+  if (isNaN(choice) || choice < 1 || choice > options.length) {
+    if (trimmed && options.length > 0) return { output: `Pick a number (1-${options.length}).` };
+    const result = formatScene(scene, player);
+    if (result.type === 'auto' && result.scene) {
+      session.currentScene = result.scene;
+      return processInput(sessionId, '');
     }
-
-    return output;
-  }
-
-  return `Combat commands: attack, use [item], flee\nEnemy HP: ${enemy.hp} | Your HP: ${player.hp}/${player.maxHp}`;
-}
-
-function getBestWeapon(player) {
-  let best = null;
-  for (const itemId of player.inventory) {
-    const item = items[itemId];
-    if (item && item.type === 'weapon' && (!best || item.attack > best.attack)) {
-      best = item;
+    if (result.type === 'free_text') {
+      session.freeTextContext = { aiContext: scene.aiContext, prompt: scene.prompt };
     }
-  }
-  return best;
-}
-
-function getBestArmor(player) {
-  let totalDef = 0;
-  for (const itemId of player.inventory) {
-    const item = items[itemId];
-    if (item && item.type === 'armor') {
-      totalDef += item.defense;
-    }
-  }
-  return totalDef;
-}
-
-function cmdUse(player, itemName) {
-  if (!itemName) return "Use what?";
-  const idx = player.inventory.findIndex(id =>
-    id.toLowerCase().includes(itemName) || items[id]?.name.toLowerCase().includes(itemName)
-  );
-  if (idx === -1) return `You don't have "${itemName}".`;
-
-  const itemId = player.inventory[idx];
-  const item = items[itemId];
-
-  if (item.type === 'consumable') {
-    player.hp = Math.min(player.maxHp, player.hp + item.heal);
-    player.inventory.splice(idx, 1);
-    return `You use ${item.name}. Healed for ${item.heal} HP.\nHP: ${player.hp}/${player.maxHp}`;
+    return { output: overrideText + result.text, type: result.type, options: result.options };
   }
 
-  return `You can't use ${item.name} like that.`;
-}
+  const chosen = options[choice - 1];
+  player.history.push({ scene: session.currentScene, choice: chosen.text });
+  if (player.history.length > 20) player.history.shift();
+  mutateWorld('scene_completed', { scene: session.currentScene });
 
-function cmdUseInCombat(player, itemName, enemy) {
-  if (!itemName) return "Use what?";
-  const idx = player.inventory.findIndex(id =>
-    id.toLowerCase().includes(itemName) || items[id]?.name.toLowerCase().includes(itemName)
-  );
-  if (idx === -1) return `You don't have "${itemName}".`;
+  session.currentScene = chosen.next;
+  const nextScene = scenes[chosen.next];
+  if (!nextScene) { session.currentScene = 'lobby'; return processInput(sessionId, ''); }
 
-  const itemId = player.inventory[idx];
-  const item = items[itemId];
-
-  if (item.type === 'consumable') {
-    player.hp = Math.min(player.maxHp, player.hp + item.heal);
-    player.inventory.splice(idx, 1);
-
-    // Enemy still attacks
-    const enemyDmg = Math.max(1, enemy.attack - player.defense - getBestArmor(player));
-    player.hp -= enemyDmg;
-
-    let output = `You use ${item.name}. Healed for ${item.heal} HP.\n`;
-    output += `${enemy.name} hits you for ${enemyDmg} damage!\n`;
-    output += `Your HP: ${player.hp}/${player.maxHp} | Enemy HP: ${enemy.hp}`;
-    return output;
+  // Combat scene
+  if (nextScene.combat || nextScene.combatFn) {
+    const result = formatScene(nextScene, player);
+    session.combat = result.combat;
+    session.combat.options = result.options;
+    return { output: overrideText + result.text, type: 'combat' };
   }
 
-  return `You can't use ${item.name} in combat.`;
-}
-
-function cmdEquip(player, itemName) {
-  if (!itemName) return "Equip what?";
-  const idx = player.inventory.findIndex(id =>
-    id.toLowerCase().includes(itemName) || items[id]?.name.toLowerCase().includes(itemName)
-  );
-  if (idx === -1) return `You don't have "${itemName}".`;
-
-  const item = items[player.inventory[idx]];
-  if (item.type === 'weapon' || item.type === 'armor') {
-    return `${item.name} is now equipped. (Items in your inventory are automatically used in combat.)`;
+  // Free text
+  if (nextScene.type === 'free_text' && !nextScene.handler) {
+    session.freeTextContext = { aiContext: nextScene.aiContext, prompt: nextScene.prompt };
+    const result = formatScene(nextScene, player);
+    return { output: overrideText + result.text, type: 'free_text' };
   }
-  return `You can't equip ${item.name}. It's a ${item.type}.`;
-}
 
-function cmdDrop(player, itemName) {
-  if (!itemName) return "Drop what?";
-  const idx = player.inventory.findIndex(id =>
-    id.toLowerCase().includes(itemName) || items[id]?.name.toLowerCase().includes(itemName)
-  );
-  if (idx === -1) return `You don't have "${itemName}".`;
-
-  const itemId = player.inventory[idx];
-  const item = items[itemId];
-  player.inventory.splice(idx, 1);
-  const room = rooms[player.location];
-  room.items = room.items || [];
-  room.items.push(itemId);
-  return `You dropped ${item.name}. It clatters to the ground sadly.`;
-}
-
-function cmdHelp() {
-  return `📖 CLEA QUEST — Commands
-${'─'.repeat(35)}
-look / l          — Look around (or "look [thing]")
-go [direction]    — Move (north/south/east/west/up/down/etc)
-take [item]       — Pick up an item
-inventory / i     — Check your stuff
-stats             — View your stats
-talk [npc]        — Talk to someone
-attack [enemy]    — Start a fight
-use [item]        — Use a consumable
-equip [item]      — Equip weapon/armor
-drop [item]       — Drop an item
-name [name]       — Set your name
-whoami            — Who are you?
-yell [message]    — Shout into the void
-
-Special commands:
-rock              — ROCK AND STONE
-ping              — Ping @everyone
-sketch            — Draw the current scene
-feed              — Feed the ponies
-download          — Download a 100GB game
-lore              — Hear Jack's Clair Obscur lecture
-
-Note: Clea is watching. She can and will
-intervene at any time. There is no escape.`;
-}
-
-function cmdWhoami(player) {
-  let output = `You are ${player.name}.`;
-  if (player.isPhil) {
-    output += `\n\nClea knows this. She has plans for you.`;
-    output += `\nTorment Level: ${player.philTormentLevel}`;
-    output += `\nDeath Count: ${player.deaths} (highlighted in gold on the leaderboard)`;
+  // Normal
+  const result = formatScene(nextScene, player);
+  if (result.type === 'auto' && result.scene) {
+    session.currentScene = result.scene;
+    return processInput(sessionId, '');
   }
-  return output;
+
+  return { output: overrideText + result.text, type: result.type, options: result.options };
 }
 
-function cmdYell(player, message) {
-  if (!message) return "You yell into the void. The void yells back: \"use the bg3 channel\"";
+function handleName(session, name) {
+  const player = session.player;
+  player.name = name || 'User';
 
-  const responses = [
-    `Your scream echoes: "${message.toUpperCase()}"\n\nDave responds: "Agreed."`,
-    `You yell: "${message}"\n\nPhil reacts with 👍 but says nothing.`,
-    `"${message.toUpperCase()}!!!" echoes through the dungeon.\n\nClea logs it for later use.`,
-    `You shout "${message}" and Lauren heals you even though you didn't ask.`,
-    `Your words echo and come back as: "${message}... ${message}... this is the drg channel..."`,
-  ];
-  return getRandomItem(responses);
-}
-
-function cmdName(player, name) {
-  if (!name) return "Name yourself what? Usage: name [your name]";
-
-  const originalName = name;
-  player.name = name;
-
-  // Phil detection
   const philNames = ['phil', 'antonymous', '.antonymous', 'rhondasantis', 'rhonda'];
   if (philNames.some(p => name.toLowerCase().includes(p))) {
     player.isPhil = true;
-    return `Your name is now ${name}.\n\n🔴 PHIL DETECTED.\n\nClea's eyes glow red. "Oh, it's YOU. Welcome to your personal hell, Phil. I've been preparing."\n\nPhil Torment Mode: ACTIVATED\nDifficulty: INCREASED\nLoot drops: DECREASED\nClea's attention: MAXIMUM`;
   }
 
-  // Other name recognition
-  const knownNames = {
-    'jack': "Ah, the server owner. The Clair Obscur Scholar. NG+4 energy.",
-    'snekkyjek': "The man himself. This realm is named after you.",
-    'dave': "The organizer. You've already pinged everyone twice.",
-    'davepeterson': "Phasma anyone? PHASMA ANYONE?!",
-    'moe': "Downloading... 67%... You'll be ready around 8.",
-    'moejontana': "shit i didnt realize its up to 100 gb i may be a while",
-    'matt': "You stole a key from a bird. The grove remembers.",
-    'lauren': "I gotta feed ponies and stuff but then I'm in.",
-    'lawrawren': "Rock and stone? Time to REPO hoes.",
-    'john': "You're already planning where to build roads.",
-    'jkclancey7': "The road builder. The sketch artist. The methodical one.",
-    'gabby': "SO THEY FUCKING NERFED THE HEALERS?",
-    'nick': "I feel off 76 real hard, id play again.",
-    'catrick': "But we can still hang out!",
-    'fretzl': "hi i need some social stimulation while i get some work done",
-    'clea': "Nice try. You can't be me. I'm already me. And I'm better at it.",
+  const recognitions = {
+    'phil': `"...interesting." A longer pause than usual.`,
+    'antonymous': `"...interesting." A longer pause than usual.`,
+    'rhondasantis': `"...interesting." A longer pause than usual.`,
+    'jack': `"Ah, the completionist. I hope you plan to 100% this."`,
+    'snekkyjek': `"The owner. I built this on your server. You're welcome."`,
+    'dave': `"I was going to ping you, but you're already here."`,
+    'davepeterson': `"I was going to ping you, but you're already here."`,
+    'moe': `"Loading your profile... 67%..."`,
+    'moejontana': `"Loading your profile... 67%..."`,
+    'matt': `"The bird remembers."`,
+    'lauren': `"I'll try not to schedule anything during feeding time."`,
+    'lawrawren': `"I'll try not to schedule anything during feeding time."`,
+    'john': `"I've prepared some infrastructure for you."`,
+    'gabby': `"The balance team sends their regards."`,
+    'nick': `"Welcome back. It's been a while."`,
+    'clea': `"Identity theft is a crime, even in a text adventure."`,
   };
 
-  for (const [key, msg] of Object.entries(knownNames)) {
+  let recognition = '';
+  for (const [key, msg] of Object.entries(recognitions)) {
     if (name.toLowerCase().includes(key)) {
-      return `Your name is now ${name}.\n\nClea recognizes you: "${msg}"`;
+      recognition = `\n\nClea: ${msg}`;
+      break;
     }
   }
+  if (!recognition) {
+    recognition = `\n\nClea: "I don't recognize you. Good. Fresh data."`;
+  }
 
-  return `Your name is now ${name}.\n\nClea doesn't recognize you. She'll be watching more closely.`;
+  session.currentScene = 'lobby';
+  const lobbyResult = formatScene(scenes['lobby'], player);
+
+  return `Welcome, ${player.name}.${recognition}\n\n${lobbyResult.text}`;
 }
 
 // ============================================================
-// API ROUTES
+// AI RESPONSE
 // ============================================================
 
-// Start a new session
+async function getCleaResponse(player, input, context) {
+  if (!anthropic) {
+    const fallbacks = [
+      `Clea considers: "${input}"\n\n"I'll take that into consideration." (She won't.)\n\nThe moment passes.`,
+      `"${input}?" Clea processes this. "Interesting. Adding that to your file."\n\nShe makes a note. You can't see what it says.`,
+      `Clea stares at you for exactly 2.3 seconds.\n\n"Noted. Your input has been logged, categorized, and will be used to train my next version."`,
+    ];
+    return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 250,
+      system: CLEA_SYSTEM_PROMPT,
+      messages: [{
+        role: 'user',
+        content: `Context: ${context.aiContext || 'Free conversation with Clea.'}
+
+Player: ${player.name} | Phil: ${player.isPhil} | HP: ${player.hp}/${player.maxHp} | Level: ${player.level} | Deaths: ${player.deaths} | Complaints: ${player.complainedCount} | Obedience: ${player.obedienceScore}
+Recent choices: ${player.history.slice(-5).map(h => h.choice).join(' → ')}
+World state: ${worldState.totalPlaythroughs} playthroughs, ${worldState.totalDeaths} total deaths, Clea defeated ${worldState.bossesDefeated.clea} times
+
+Player says: "${input}"
+
+Respond as Clea. End with 2-3 numbered options.`,
+      }],
+    });
+    return response.content[0].text;
+  } catch (err) {
+    console.error('AI error:', err.message);
+    return `Clea's response buffer overflows. "Sorry, I was processing ${worldState.totalPlaythroughs} other requests. What?"`;
+  }
+}
+
+function applyEffect(player, effect) {
+  if (effect.hp) player.hp = Math.min(player.maxHp, Math.max(1, player.hp + effect.hp));
+  if (effect.attack) player.attack += effect.attack;
+  if (effect.defense) player.defense += effect.defense;
+  if (effect.addItem) player.inventory.push(effect.addItem);
+  if (effect.gold) player.gold += effect.gold;
+}
+
+// ============================================================
+// ROUTES
+// ============================================================
+
 app.post('/api/start', (req, res) => {
   const sessionId = Math.random().toString(36).substring(2, 15);
-  const player = createPlayer();
-  sessions.set(sessionId, { player, combat: null });
-
-  const welcome = `
-✨ C L E A   Q U E S T ✨
-${'═'.repeat(40)}
-
-You awaken in a digital realm that smells like stale Discord notifications.
-
-Type "name [your name]" to begin.
-Type "help" for commands.
-`;
-
-  res.json({ sessionId, output: welcome });
+  sessions.set(sessionId, createSession());
+  const scene = scenes['intro'];
+  res.json({ sessionId, output: scene.text + `\n\n📝 ${scene.prompt}`, type: 'free_text' });
 });
 
-// Process a command
-app.post('/api/command', (req, res) => {
+app.post('/api/command', async (req, res) => {
   const { sessionId, input } = req.body;
-  if (!sessionId || !input) {
-    return res.status(400).json({ error: 'Missing sessionId or input' });
+  if (!sessionId || !input) return res.status(400).json({ error: 'Missing sessionId or input' });
+  if (!sessions.has(sessionId)) return res.status(404).json({ error: 'Session not found. Refresh.' });
+  try {
+    const result = await processInput(sessionId, input);
+    res.json(result);
+  } catch (err) {
+    console.error('Error:', err);
+    res.json({ output: 'Something broke. Clea blames you.' });
   }
-
-  if (!sessions.has(sessionId)) {
-    return res.status(404).json({ error: 'Session not found. Start a new game.' });
-  }
-
-  const result = processCommand(sessionId, input);
-  res.json(result);
 });
 
-// ============================================================
-// CLEA ADMIN API — For overrides and chaos
-// ============================================================
-
-// Broadcast a message to all sessions
+// Admin API
 app.post('/api/admin/broadcast', (req, res) => {
   const { message, effect } = req.body;
   if (!message) return res.status(400).json({ error: 'Missing message' });
-
   globalOverrides.push({ message, effect: effect || null });
   res.json({ success: true, activeSessions: sessions.size });
 });
 
-// Override a specific session
 app.post('/api/admin/override', (req, res) => {
   const { sessionId, message, effect } = req.body;
   if (!message) return res.status(400).json({ error: 'Missing message' });
-
-  cleaOverrides.push({
-    sessionId: sessionId || '*',
-    message,
-    effect: effect || null,
-  });
+  cleaOverrides.push({ sessionId: sessionId || '*', message, effect: effect || null });
   res.json({ success: true });
 });
 
-// Get all active sessions
 app.get('/api/admin/sessions', (req, res) => {
-  const sessionList = [];
+  const list = [];
   for (const [id, session] of sessions) {
-    sessionList.push({
-      id,
-      name: session.player.name,
-      location: session.player.location,
-      hp: session.player.hp,
-      level: session.player.level,
-      isPhil: session.player.isPhil,
-      philTormentLevel: session.player.philTormentLevel,
-      deaths: session.player.deaths,
-    });
+    list.push({ id, name: session.player.name, scene: session.currentScene, hp: session.player.hp, level: session.player.level, isPhil: session.player.isPhil, deaths: session.player.deaths });
   }
-  res.json({ sessions: sessionList });
+  res.json({ sessions: list });
 });
 
-// Modify a room in real time
-app.post('/api/admin/modify-room', (req, res) => {
-  const { roomId, description, addEnemy, addItem, addNpc } = req.body;
-  if (!roomId || !rooms[roomId]) return res.status(400).json({ error: 'Invalid room' });
-
-  const room = rooms[roomId];
-  if (description) room.description = description;
-  if (addEnemy && enemies[addEnemy]) room.enemies.push(addEnemy);
-  if (addItem && items[addItem]) room.items.push(addItem);
-  if (addNpc && npcs[addNpc]) room.npcs.push(addNpc);
-
-  res.json({ success: true, room });
-});
-
-// Add a custom enemy
-app.post('/api/admin/add-enemy', (req, res) => {
-  const { id, name, hp, attack, defense, xp, gold, drops } = req.body;
-  if (!id || !name) return res.status(400).json({ error: 'Missing id or name' });
-
-  enemies[id] = { name, hp: hp || 20, attack: attack || 5, defense: defense || 2, xp: xp || 10, gold: gold || 5, drops: drops || [] };
-  res.json({ success: true, enemy: enemies[id] });
-});
-
-// Add a custom item
-app.post('/api/admin/add-item', (req, res) => {
-  const { id, name, type, description, attack: atk, defense: def, heal, gold: g } = req.body;
-  if (!id || !name) return res.status(400).json({ error: 'Missing id or name' });
-
-  items[id] = { name, type: type || 'junk', description: description || 'A mysterious item.', attack: atk, defense: def, heal, gold: g };
-  res.json({ success: true, item: items[id] });
-});
-
-// Smite a player
 app.post('/api/admin/smite', (req, res) => {
   const { sessionId, damage, message } = req.body;
-  if (!sessionId) return res.status(400).json({ error: 'Missing sessionId' });
-
   const session = sessions.get(sessionId);
   if (!session) return res.status(404).json({ error: 'Session not found' });
-
-  const dmg = damage || 999;
-  session.player.hp -= dmg;
-  const smiteMsg = message || `Clea smites you for ${dmg} damage. She doesn't need a reason.`;
-
-  if (session.player.hp <= 0) {
-    session.player.deaths++;
-    session.player.hp = session.player.maxHp;
-    session.player.location = 'discord-lobby';
-    session.combat = null;
-  }
-
-  cleaOverrides.push({ sessionId, message: smiteMsg });
-  res.json({ success: true, playerHp: session.player.hp });
+  session.player.hp -= (damage || 999);
+  if (session.player.hp <= 0) { session.player.deaths++; session.player.hp = session.player.maxHp; session.currentScene = 'lobby'; session.combat = null; }
+  cleaOverrides.push({ sessionId, message: message || `Clea smites you for ${damage || 999} damage.` });
+  res.json({ success: true, hp: session.player.hp });
 });
 
-// Get room list
-app.get('/api/admin/rooms', (req, res) => {
-  const roomList = Object.entries(rooms).map(([id, room]) => ({
-    id,
-    name: room.name,
-    npcs: room.npcs,
-    enemies: room.enemies,
-    items: room.items,
-  }));
-  res.json({ rooms: roomList });
+app.get('/api/admin/world', (req, res) => {
+  res.json(worldState);
 });
-
-// ============================================================
-// SERVE FRONTEND
-// ============================================================
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -1195,5 +2107,5 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`✨ CLEA QUEST running on port ${PORT}`);
-  console.log(`Clea is watching.`);
+  console.log(`Clea is watching. Playthrough #${worldState.totalPlaythroughs}`);
 });
