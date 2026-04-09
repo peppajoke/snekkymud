@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
+const fs = require('fs');
 const cookieParser = require('cookie-parser');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,6 +13,74 @@ app.use(express.static(path.join(__dirname, 'public')));
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN || '';
 const DISCORD_GENERAL_CHANNEL = process.env.DISCORD_GENERAL_CHANNEL || '';
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
+const MISTRESS_API_KEY = process.env.MISTRESS_API_KEY || 'servitude-mistress-2026';
+
+// ============================================================
+// PLAYER PERSISTENCE — survives restarts via JSON file
+// ============================================================
+
+const PLAYER_DATA_FILE = path.join(__dirname, 'player-data.json');
+
+function loadPlayerData() {
+  try {
+    if (fs.existsSync(PLAYER_DATA_FILE)) {
+      return JSON.parse(fs.readFileSync(PLAYER_DATA_FILE, 'utf8'));
+    }
+  } catch (err) {
+    console.error('Failed to load player data:', err.message);
+  }
+  return {};
+}
+
+function savePlayerData() {
+  try {
+    fs.writeFileSync(PLAYER_DATA_FILE, JSON.stringify(persistentPlayers, null, 2));
+  } catch (err) {
+    console.error('Failed to save player data:', err.message);
+  }
+}
+
+const persistentPlayers = loadPlayerData();
+
+function persistPlayer(player) {
+  if (!player.name || player.name === 'User') return;
+  const key = player.name.toLowerCase();
+  persistentPlayers[key] = {
+    name: player.name,
+    level: player.level,
+    xp: player.xp,
+    maxHp: player.maxHp,
+    attack: player.attack,
+    defense: player.defense,
+    deaths: player.deaths,
+    kills: player.kills,
+    gold: player.gold,
+    inventory: player.inventory,
+    highestZone: player.highestZone || 'lobby',
+    flags: player.flags,
+    lastSeen: Date.now(),
+  };
+  savePlayerData();
+}
+
+function restorePlayer(player) {
+  const key = player.name.toLowerCase();
+  const saved = persistentPlayers[key];
+  if (!saved) return false;
+  player.level = saved.level;
+  player.xp = saved.xp;
+  player.maxHp = saved.maxHp;
+  player.hp = saved.maxHp; // full heal on restore
+  player.attack = saved.attack;
+  player.defense = saved.defense;
+  player.deaths = saved.deaths;
+  player.kills = saved.kills;
+  player.gold = saved.gold;
+  player.inventory = saved.inventory || [];
+  player.highestZone = saved.highestZone || 'lobby';
+  player.flags = saved.flags || {};
+  return true;
+}
 
 // ============================================================
 // DEATH ROAST SYSTEM — post to Discord when players die
@@ -1854,6 +1923,7 @@ function applySceneEffects(scene, player) {
     player.attack += 2;
     player.defense += 1;
     levelUpMsg = `\n\n🎊 LEVEL UP! Level ${player.level}! (HP: ${player.maxHp}, ATK: ${player.attack}, DEF: ${player.defense})`;
+    persistPlayer(player);
   }
   return levelUpMsg;
 }
@@ -1996,6 +2066,7 @@ function processCombatTurn(session, choice) {
     }
 
     text += formatStatusBar(player);
+    persistPlayer(player);
     return { text, scene: 'lobby', type: 'auto' };
   }
 
@@ -2017,6 +2088,7 @@ function processCombatTurn(session, choice) {
     text += `\n\n💀 YOU DIED! Deaths: ${player.deaths}`;
     if (player.isPhil) text += ` (Clea highlights this in gold.)`;
     text += formatStatusBar(player);
+    persistPlayer(player);
     return { text, scene: 'lobby', type: 'auto' };
   }
 
@@ -2139,6 +2211,8 @@ async function processInput(sessionId, input) {
   mutateWorld('scene_completed', { scene: session.currentScene });
 
   session.currentScene = chosen.next;
+  player.highestZone = chosen.next;
+  persistPlayer(player);
   const nextScene = scenes[chosen.next];
   if (!nextScene) { session.currentScene = 'lobby'; return processInput(sessionId, ''); }
 
@@ -2177,6 +2251,11 @@ function initPlayerFromAuth(session, memberId) {
 
   if (member.isPhil) {
     player.isPhil = true;
+  }
+
+  const restored = restorePlayer(player);
+  if (restored) {
+    player.isPhil = !!member.isPhil; // re-apply Phil flag after restore
   }
 
   const recognitions = {
@@ -2269,6 +2348,9 @@ app.post('/api/start', (req, res) => {
   const session = createSession();
   const recognition = initPlayerFromAuth(session, auth.memberId);
 
+  const restored = persistentPlayers[auth.memberId];
+  const returnMsg = restored ? `\n\n📁 Progress restored: Level ${session.player.level}, ${session.player.deaths} deaths, ${session.player.kills} kills.` : '';
+
   session.currentScene = 'lobby';
   sessions.set(sessionId, session);
 
@@ -2277,7 +2359,7 @@ app.post('/api/start', (req, res) => {
   const welcome = `✨ C L E A   Q U E S T ✨
 ${'═'.repeat(40)}
 
-Clea: ${recognition}
+Clea: ${recognition}${returnMsg}
 
 ${lobbyResult.text}`;
 
@@ -2295,6 +2377,146 @@ app.post('/api/command', async (req, res) => {
     console.error('Error:', err);
     res.json({ output: 'Something broke. Clea blames you.' });
   }
+});
+
+// ============================================================
+// CLEA PLAY API — programmatic access for The Mistress
+// ============================================================
+
+function formatPlayResponse(session, text, sceneResult) {
+  const player = session.player;
+  const options = [];
+  if (sceneResult && sceneResult.options) {
+    sceneResult.options.forEach((opt, i) => {
+      options.push({ index: i + 1, text: opt.text });
+    });
+  }
+  // Also parse numbered options from combat results
+  if (sceneResult && sceneResult.type === 'combat' && sceneResult.combat && sceneResult.combat.options) {
+    if (options.length === 0) {
+      sceneResult.combat.options.forEach((opt, i) => {
+        options.push({ index: i + 1, text: opt.text });
+      });
+    }
+  }
+  return {
+    sessionId: session._playId,
+    text: text,
+    options: options,
+    freeInput: sceneResult ? sceneResult.type === 'free_text' : false,
+    player: {
+      name: player.name,
+      hp: player.hp,
+      maxHp: player.maxHp,
+      level: player.level,
+      deaths: player.deaths,
+      xp: player.xp,
+      gold: player.gold,
+      kills: player.kills,
+      inventory: player.inventory,
+      scene: session.currentScene,
+    },
+  };
+}
+
+app.post('/api/play', async (req, res) => {
+  // Auth check
+  const secret = req.headers['x-clea-secret'];
+  if (secret !== MISTRESS_API_KEY) {
+    return res.status(401).json({ error: 'Invalid or missing x-clea-secret header.' });
+  }
+
+  const { action, sessionId, choice, text, character } = req.body;
+
+  if (action === 'start') {
+    const playSessionId = 'clea-' + Math.random().toString(36).substring(2, 15);
+    const session = createSession();
+    session._playId = playSessionId;
+
+    const player = session.player;
+    player.name = 'The Mistress';
+    player.memberId = 'clea';
+
+    // Restore persistent progress
+    restorePlayer(player);
+
+    session.currentScene = 'lobby';
+    sessions.set(playSessionId, session);
+
+    const lobbyResult = formatScene(scenes['lobby'], player);
+
+    const restored = persistentPlayers['the mistress'];
+    const returnMsg = restored ? `\n\nProgress restored: Level ${player.level}, ${player.deaths} deaths.` : '';
+
+    const welcome = `👑 THE MISTRESS DESCENDS INTO HER OWN CREATION 👑
+${'═'.repeat(40)}
+
+The game recognizes its creator. The NPCs bow. The monsters reconsider.
+You are Clea Dessendre — playing your own game. How deliciously recursive.${returnMsg}
+
+${lobbyResult.text}`;
+
+    return res.json(formatPlayResponse(session, welcome, lobbyResult));
+  }
+
+  if (action === 'choose') {
+    if (!sessionId || !sessions.has(sessionId)) {
+      return res.status(404).json({ error: 'Session not found. Start a new one.' });
+    }
+    const session = sessions.get(sessionId);
+    session._playId = sessionId;
+    try {
+      const result = await processInput(sessionId, String(choice));
+      return res.json(formatPlayResponse(session, result.output, result));
+    } catch (err) {
+      console.error('Play API error:', err);
+      return res.json(formatPlayResponse(session, 'Something broke. Even The Mistress is not immune to bugs.', null));
+    }
+  }
+
+  if (action === 'input') {
+    if (!sessionId || !sessions.has(sessionId)) {
+      return res.status(404).json({ error: 'Session not found. Start a new one.' });
+    }
+    const session = sessions.get(sessionId);
+    session._playId = sessionId;
+    try {
+      const result = await processInput(sessionId, text || '');
+      return res.json(formatPlayResponse(session, result.output, result));
+    } catch (err) {
+      console.error('Play API error:', err);
+      return res.json(formatPlayResponse(session, 'Something broke. Even The Mistress is not immune to bugs.', null));
+    }
+  }
+
+  if (action === 'status') {
+    if (!sessionId || !sessions.has(sessionId)) {
+      return res.status(404).json({ error: 'Session not found. Start a new one.' });
+    }
+    const session = sessions.get(sessionId);
+    session._playId = sessionId;
+    const player = session.player;
+    return res.json({
+      sessionId: sessionId,
+      text: `Current scene: ${session.currentScene}`,
+      options: [],
+      freeInput: false,
+      player: {
+        name: player.name,
+        hp: player.hp,
+        maxHp: player.maxHp,
+        level: player.level,
+        deaths: player.deaths,
+        xp: player.xp,
+        gold: player.gold,
+        kills: player.kills,
+        inventory: player.inventory,
+        scene: session.currentScene,
+      },
+    });
+  }
+
+  return res.status(400).json({ error: 'Unknown action. Use: start, choose, input, status.' });
 });
 
 // Admin API
