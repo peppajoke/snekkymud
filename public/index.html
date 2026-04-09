@@ -122,6 +122,8 @@
       .auth-title { font-size: 22px; }
     }
 
+    .nav-hint { color: #00ff4133; font-size: 12px; text-align: right; margin-bottom: 4px; }
+
     /* Phil mode */
     body.phil-mode { color: #ff4444; }
     body.phil-mode #output { color: #ff4444; }
@@ -189,6 +191,9 @@
     let selectedMember = null;
     let commandHistory = [];
     let historyIndex = -1;
+    let screenHistory = [];   // stack of previous screens
+    let screenIndex = -1;     // -1 = current (live), 0+ = looking back
+    let currentScreen = null; // the latest screen content
 
     // ── AUTH FLOW ─────────────────────────────────────────
 
@@ -382,17 +387,22 @@
           document.querySelector('#header .subtitle').textContent = 'a game by clea // difficulty adjusted';
         }
 
-        appendOutput(data.output, 'system');
+        showScreen([{ text: data.output, cls: 'system' }]);
         input.focus();
       } catch (err) {
-        appendOutput('Failed to connect to Clea Quest.', 'error');
+        showScreen([{ text: 'Failed to connect to Clea Quest.', cls: 'error' }]);
       }
     }
 
     async function sendCommand(cmd) {
       if (!sessionId || !cmd.trim()) return;
 
-      appendOutput(`> ${cmd}`, 'command');
+      // If browsing history, snap back to current first
+      if (screenIndex >= 0) {
+        screenIndex = -1;
+        renderScreen(currentScreen);
+      }
+
       commandHistory.unshift(cmd);
       historyIndex = -1;
 
@@ -405,41 +415,104 @@
 
         if (!res.ok) {
           if (res.status === 404) {
-            appendOutput('Session expired. Reloading...', 'error');
+            showScreen([{ text: 'Session expired. Reloading...', cls: 'error' }]);
             setTimeout(() => enterGame(), 1000);
             return;
           }
           const err = await res.json();
-          appendOutput(err.error || 'Something went wrong.', 'error');
+          showScreen([{ text: err.error || 'Something went wrong.', cls: 'error' }]);
           return;
         }
 
         const data = await res.json();
         let text = data.output;
 
+        const lines = [];
+        lines.push({ text: `> ${cmd}`, cls: 'command' });
+
         if (text.includes('[CLEA]')) {
           const parts = text.split(/(\n🔮 \[CLEA\]:.*?)(?=\n|$)/);
           for (const part of parts) {
             if (part.includes('[CLEA]')) {
-              appendOutput(part.trim(), 'override');
+              lines.push({ text: part.trim(), cls: 'override' });
             } else if (part.trim()) {
-              appendOutput(part.trim(), 'system');
+              lines.push({ text: part.trim(), cls: 'system' });
             }
           }
         } else {
-          appendOutput(text, 'system');
+          lines.push({ text, cls: 'system' });
         }
+
+        showScreen(lines);
       } catch {
-        appendOutput('Connection lost. Clea probably unplugged something.', 'error');
+        showScreen([
+          { text: `> ${cmd}`, cls: 'command' },
+          { text: 'Connection lost. Clea probably unplugged something.', cls: 'error' },
+        ]);
       }
     }
 
-    function appendOutput(text, className) {
-      const div = document.createElement('div');
-      div.className = `output-line ${className}`;
-      div.textContent = text;
-      output.appendChild(div);
-      output.scrollTop = output.scrollHeight;
+    function showScreen(lines) {
+      // Save current screen to history before replacing
+      if (currentScreen) {
+        screenHistory.push(currentScreen);
+        if (screenHistory.length > 50) screenHistory.shift();
+      }
+      currentScreen = lines;
+      screenIndex = -1;
+      renderScreen(lines);
+    }
+
+    function renderScreen(lines) {
+      output.innerHTML = '';
+      if (!lines) return;
+
+      // Show navigation hint if there's history
+      if (screenHistory.length > 0) {
+        const hint = document.createElement('div');
+        hint.className = 'output-line nav-hint';
+        if (screenIndex >= 0) {
+          hint.textContent = `[screen ${screenHistory.length - screenIndex} of ${screenHistory.length + 1} — Esc to return]`;
+        } else {
+          hint.textContent = `[Pg Up for previous screens]`;
+        }
+        output.appendChild(hint);
+      }
+
+      for (const line of lines) {
+        const div = document.createElement('div');
+        div.className = `output-line ${line.cls}`;
+        div.textContent = line.text;
+        output.appendChild(div);
+      }
+      output.scrollTop = 0;
+    }
+
+    function navigateBack() {
+      if (screenHistory.length === 0) return;
+      if (screenIndex < 0) screenIndex = screenHistory.length - 1;
+      else if (screenIndex > 0) screenIndex--;
+      else return; // already at oldest
+      renderScreen(screenHistory[screenIndex]);
+    }
+
+    function navigateForward() {
+      if (screenIndex < 0) return; // already on current
+      if (screenIndex < screenHistory.length - 1) {
+        screenIndex++;
+        renderScreen(screenHistory[screenIndex]);
+      } else {
+        // Back to current
+        screenIndex = -1;
+        renderScreen(currentScreen);
+      }
+    }
+
+    function snapToCurrent() {
+      if (screenIndex >= 0) {
+        screenIndex = -1;
+        renderScreen(currentScreen);
+      }
     }
 
     input.addEventListener('keydown', (e) => {
@@ -454,6 +527,15 @@
         e.preventDefault();
         if (historyIndex > 0) { historyIndex--; input.value = commandHistory[historyIndex]; }
         else { historyIndex = -1; input.value = ''; }
+      } else if (e.key === 'PageUp') {
+        e.preventDefault();
+        navigateBack();
+      } else if (e.key === 'PageDown') {
+        e.preventDefault();
+        navigateForward();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        snapToCurrent();
       }
     });
 
