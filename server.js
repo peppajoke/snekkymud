@@ -4995,10 +4995,14 @@ A gramophone plays motivational egg quotes. Currently: "The raw egg does not apo
     optionsFn: (player) => {
       const opts = [
         { text: 'Take a propaganda poster (+1 ATK, it\'s motivating)', next: 'egg-propaganda-poster' },
+        { text: 'Read Matt\'s Egg Manifesto (47 pages)', next: 'egg-propaganda-read' },
         { text: 'Watch all six of Matt\'s egg videos', next: 'egg-propaganda-videos' },
         { text: 'Deface a poster (risky — Matt is watching)', next: 'egg-propaganda-deface' },
-        { text: 'Read Matt\'s Egg Manifesto (47 pages)', next: 'egg-propaganda-read' },
         { text: 'Salute the posters (for Matt)', next: 'egg-propaganda-salute' },
+        { text: 'Sign the guest book (the parrot insists)', next: 'egg-propaganda-sign' },
+        { text: 'Watch the Discord montage on loop', next: 'egg-propaganda-montage' },
+        { text: 'Examine Matt\'s campaign poster', next: 'egg-propaganda-pledge' },
+        { text: 'Start an egg counter-revolution', next: 'egg-propaganda-revolt' },
         { text: 'Use the Egg Hotline phone booth (NEW)', next: 'egg-hotline' },
         { text: 'Talk to Dr. Helen, NPC Therapist (she looks tired)', next: 'egg-therapist' },
         { text: 'Back to the dojo', next: 'egg-dojo' },
