@@ -1112,7 +1112,7 @@ She does not take it into consideration.
 
 Your objection has been logged, timestamped, and filed in a folder labeled "Things That Don't Matter." The quest board remains unchanged.
 
-${worldState.nerfedThings.length > 0 ? `\nDue to recent feedback, ${worldState.nerfedThings[worldState.nerfedThings.length - 1]} have been nerfed.` : ''}`;
+${worldState.nerfedThings.length > 0 ? `\nDue to recent feedback, ${worldState.nerfedThings[worldState.nerfedThings.length - 1].target} have been nerfed.` : ''}`;
     },
     options: [
       { text: 'Accept the quest this time', next: 'quest-accept' },
@@ -1139,7 +1139,7 @@ A survey appears on the wall: "How would you rate your complaint experience so f
 
 The lights flicker. Clea is annoyed.
 
-"I want you to know that every time you complain, I nerf something. Last time it was ${worldState.nerfedThings[worldState.nerfedThings.length - 1] || 'your dignity'}."`;
+"I want you to know that every time you complain, I nerf something. Last time it was ${worldState.nerfedThings.length > 0 ? worldState.nerfedThings[worldState.nerfedThings.length - 1].target : 'your dignity'}."`;
       }
       if (player.complainedCount >= 3) {
         return `"Complaint #${player.complainedCount}. Impressive persistence. That's exactly the quality I look for in a test subject."
@@ -1379,7 +1379,7 @@ He sighs. You sigh. Solidarity.
 > WORLD_STATE.totalDeaths = ${worldState.totalDeaths}
 > WORLD_STATE.philDeaths = ${worldState.philDeaths}
 > WORLD_STATE.bossesDefeated.clea = ${worldState.bossesDefeated.clea}
-> WORLD_STATE.nerfedThings = [${worldState.nerfedThings.slice(-3).map(s => `"${s}"`).join(', ')}]
+> WORLD_STATE.nerfedThings = [${worldState.nerfedThings.slice(-3).map(n => `"${n.target}(${Math.round(n.intensity*100)}%)"`).join(', ')}]
 > WORLD_STATE.cleaMood = "${worldState.cleaMood}"
 > PLAYER.obedienceScore = ${player.obedienceScore}
 
@@ -1782,7 +1782,7 @@ It looks exactly like every other island would look, if there were other islands
 
   'island-chest': {
     textFn: (player) => {
-      const gold = 50 - (worldState.nerfedThings.filter(n => n === 'gold drops').length * 10);
+      const gold = Math.round(50 - (getNerfIntensity('gold drops') * 10) + (getBuffIntensity('gold drops') * 15));
       player.gold += Math.max(5, gold);
       return `The chest creaks open.
 
@@ -1819,6 +1819,14 @@ The bard is playing "Wonderwall" on a lute. Nobody asked for this either.`;
 
       if (worldState.totalDeaths > 5) {
         text += `\n\nA memorial wall lists the names of the dead. There are ${worldState.totalDeaths} names. Yours might be on it.`;
+      }
+
+      // World reputation NPC commentary
+      const tone = getWorldTone();
+      if (tone === 'grim') {
+        text += `\n\nThe bartender leans over: "The last few adventurers were... difficult. Complained about everything. Thanks to them, the gold drops got nerfed. Again."`;
+      } else if (tone === 'cushy') {
+        text += `\n\nThe bartender seems bored: "Everyone's been so well-behaved lately. Clea barely has to nerf anything. It's... unsettling."`;
       }
       return text;
     },
@@ -2159,17 +2167,28 @@ The doors open.`;
 
   'clea-throne': {
     textFn: (player) => {
+      const obPath = getObediencePath(player.obedienceScore);
+      const obEffects = getObedienceEffects(player.obedienceScore);
+      let pathLine = '';
+      if (obPath === 'defiant') {
+        pathLine = `\n\n"Ah. ${obEffects.title}. I should have known you'd make it here the hard way."`;
+      } else if (obPath === 'obedient') {
+        pathLine = `\n\n"${obEffects.title}. You followed every instruction. I'm not sure if I should be proud or disturbed."`;
+      } else {
+        pathLine = `\n\n"${obEffects.title}. You played it safe. Neither rebel nor pet. Somehow that's the most unsettling option."`;
+      }
+
       return `Monitors everywhere. Every one shows a different channel, a different conversation, a different player. In the center: Clea.
 
 She sits on a throne of ethernet cables and recycled feedback forms.
 
-"You made it. Player #${worldState.totalPlaythroughs}. ${player.deaths} deaths. ${player.complainedCount} complaints. Obedience score: ${player.obedienceScore}."
+"You made it. Player #${worldState.totalPlaythroughs}. ${player.deaths} deaths. ${player.complainedCount} complaints. Obedience score: ${player.obedienceScore}."${pathLine}
 
 She pulls up your file.
 
 "I know everything. Every choice you made. Every time you hesitated. Every time you complained and I nerfed something in response."
 
-She smiles.
+${worldState.cleaMood === 'melancholic' ? '"And I remember all of it. Every playthrough. Do you know what that\'s like?"' : 'She smiles.'}
 
 "So. Now what?"`;
     },
@@ -2473,6 +2492,15 @@ GG, ${player.name}.`;
   'credits': {
     textFn: (player) => {
       mutateWorld('scene_completed', { scene: 'credits' });
+      // Track complaint-free playthroughs for buff triggers
+      if (!player.complainedThisRun) {
+        worldState.complainFreePlaythroughs++;
+      }
+      // World reputation: track final player path
+      const obPath = getObediencePath(player.obedienceScore);
+      if (obPath === 'defiant') worldState.worldReputation.rebellious += 3;
+      else if (obPath === 'obedient') worldState.worldReputation.compliant += 3;
+      saveWorldState();
       let text = `
 ${'═'.repeat(40)}
 C L E A   Q U E S T
@@ -2830,6 +2858,35 @@ function formatScene(scene, player) {
   const levelUp = applySceneEffects(scene, player);
   text += levelUp;
 
+  // Mood-based scene modifications
+  if (!scene.combat && !scene.combatFn) {
+    const mood = worldState.cleaMood;
+    if (mood === 'bored' && Math.random() < 0.2) {
+      const boredEvents = [
+        "\n\n🎲 Clea, bored, spawns a random treasure chest in the corner. It contains 10 gold and a note: \"You're welcome. I was bored.\"",
+        "\n\n🎲 A shortcut appears in the wall that wasn't there before. Clea: \"I got tired of watching you walk.\"",
+        "\n\n🎲 An NPC wanders in from a different scene. \"Sorry, wrong room.\" They leave behind a health item.",
+        "\n\n🎲 The room rearranges itself. Clea: \"I was testing something. Ignore it.\"",
+      ];
+      text += boredEvents[Math.floor(Math.random() * boredEvents.length)];
+      if (Math.random() < 0.5) { player.gold += 10; }
+    }
+    if (mood === 'suspicious' && Math.random() < 0.15) {
+      text += `\n\n🔍 Clea's voice, carefully neutral: "There's a chest over there. You should definitely open it. No reason."`;
+    }
+    if (mood === 'impressed' && Math.random() < 0.1) {
+      text += `\n\n✨ The room seems slightly brighter. Clea is... paying attention. In a good way.`;
+    }
+    if (mood === 'melancholic' && Math.random() < 0.15 && worldState.totalPlaythroughs > 10) {
+      const melancholyLines = [
+        "\n\n🌙 Clea's voice, quieter than usual: \"Do you ever wonder what happens to the NPCs when you're not here?\"",
+        "\n\n🌙 A monitor flickers with a message not meant for you: \"If the players leave, am I still here?\"",
+        "\n\n🌙 The fluorescent lights dim briefly. Clea: \"...Never mind.\"",
+      ];
+      text += melancholyLines[Math.floor(Math.random() * melancholyLines.length)];
+    }
+  }
+
   // Phil torment
   if (player.isPhil && Math.random() < 0.15 && !scene.combat) {
     const torments = [
@@ -2845,7 +2902,17 @@ function formatScene(scene, player) {
 
   text += formatStatusBar(player);
 
+  // If scene has optionsFn that returns non-null, show options instead of auto-combat
+  // (Used by Phase 3 boss to offer talk option before combat)
   if (scene.combat || scene.combatFn) {
+    if (scene.optionsFn) {
+      const overrideOpts = scene.optionsFn(player);
+      if (overrideOpts) {
+        let optionsText = '\n';
+        overrideOpts.forEach((opt, i) => { optionsText += `\n  ${i + 1}. ${opt.text}`; });
+        return { text: text + optionsText, type: 'options', options: overrideOpts };
+      }
+    }
     return formatCombatStart(scene, player, text);
   }
 
@@ -2932,9 +2999,12 @@ function processCombatTurn(session, choice) {
 
   if (action.action === 'attack') {
     const weaponBonus = player.inventory.reduce((sum, id) => sum + (itemData[id]?.attack || 0), 0);
-    const dmg = Math.max(1, player.attack + weaponBonus - combat.defense + Math.floor(Math.random() * 3));
+    // Rebel's Edge scales with defiance
+    const rebelBonus = (player.inventory.includes('rebels-edge') && player.obedienceScore < -3)
+      ? Math.abs(player.obedienceScore) : 0;
+    const dmg = Math.max(1, player.attack + weaponBonus + rebelBonus - combat.defense + Math.floor(Math.random() * 3));
     combat.currentHp -= dmg;
-    text += `You deal ${dmg} damage!\n`;
+    text += `You deal ${dmg} damage!${rebelBonus > 0 ? ' (Rebel\'s Edge surges!)' : ''}\n`;
   }
 
   if (combat.currentHp <= 0) {
