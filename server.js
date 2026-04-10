@@ -3205,6 +3205,7 @@ Someone has scrawled in the margin: "this started on Discord and now it's IN the
       { text: 'Check the Discord testimonials', next: 'egg-testimonials' },
       { text: 'Attend Matt\'s Egg Intervention (sounds serious)', next: 'egg-intervention' },
       { text: 'Visit Matt\'s Smoothie Bar (NEW)', next: 'egg-smoothie-bar' },
+      { text: 'Enter Matt\'s Raw Egg Speedrun (LIVE — prize pool active)', next: 'egg-speedrun' },
       { text: 'Back to the tavern', next: 'tavern' },
     ],
   },
