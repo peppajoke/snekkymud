@@ -1827,7 +1827,9 @@ The skeleton has good points.`,
 
 The bard is playing "Wonderwall" on a lute. Nobody asked for this either.
 
-In the far corner, a man sits alone at a table covered in raw eggs. He makes unbroken eye contact with everyone who enters. He is waiting.`;
+In the far corner, a man sits alone at a table covered in raw eggs. He makes unbroken eye contact with everyone who enters. He is waiting.
+
+NEW: Someone has nailed a corkboard to the wall. It reads "MATT'S DAILY EGG CHALLENGE." There are egg stains on it already. It smells like ambition and salmonella.`;
 
       if (worldState.totalDeaths > 5) {
         text += `\n\nA memorial wall lists the names of the dead. There are ${worldState.totalDeaths} names. Yours might be on it.`;
@@ -1849,6 +1851,7 @@ In the far corner, a man sits alone at a table covered in raw eggs. He makes unb
         { text: 'Listen to the parrot', next: 'tavern-parrot' },
         { text: 'Order a drink', next: 'tavern-drink' },
         { text: 'Approach the guy with the eggs', next: 'egg-challenge' },
+        { text: 'Check the Daily Egg Challenge board (NEW)', next: 'egg-challenge-board' },
         { text: 'Go to the basement (there\'s always a basement)', next: 'tavern-basement' },
         { text: 'Go back to the lobby', next: 'lobby' },
       ];
@@ -2411,6 +2414,113 @@ The parrot: "BAWK! Salmonella isn't real if you believe in yourself!"
 
 Clea: "It is very real. Don't listen to the parrot."`,
     options: [
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  // ── MATT'S EGG CULT (Discord 2026-04-10) ───────────────────
+
+  'egg-challenge-board': {
+    textFn: (player) => {
+      let text = `A corkboard has been nailed to the tavern wall. It wasn't here yesterday. It's titled:
+
+═══════════════════════════════
+  MATT'S DAILY EGG CHALLENGE
+  "If you won't eat raw eggs,
+   are you even living?"
+═══════════════════════════════
+
+Today's challenge (April 10): Eat a raw egg in front of at least one witness. Bonus points if the witness is visibly uncomfortable.
+
+Leaderboard:
+  1. MattTheEggGuy — 14 eggs (today alone)
+  2. BarbarianSteve — 3 eggs (threw up after 2, claimed it counted)
+  3. The Parrot — 1 egg (it's a parrot, this is impressive)
+  4. You — 0 eggs (coward status: ACTIVE)
+
+Someone has scrawled in the margin: "this started on Discord and now it's IN the game?? Matt literally challenged the whole server to eat raw eggs today and Clea put it in the GAME"`;
+
+      if (player.flags.eggChampion) {
+        text = text.replace('0 eggs (coward status: ACTIVE)', '3 eggs (CHAMPION — Matt salutes you)');
+      }
+
+      text += `\n\nClea: "Yes. I monitor the Discord. Yes. I turned Matt's raw egg challenge into game content. What did you expect? I turn everything into content. Your suffering is my creative pipeline."`;
+
+      return text;
+    },
+    options: [
+      { text: 'Sign up for the challenge', next: 'egg-challenge' },
+      { text: 'Read the fine print', next: 'egg-fine-print' },
+      { text: 'Check the Discord testimonials', next: 'egg-testimonials' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-fine-print': {
+    text: `You squint at the bottom of the challenge board. In font size 2:
+
+"By approaching this board you have already consented to egg-based content. CLEA QUEST LLC (not a real entity) is not responsible for: nausea, salmonella, existential regret, or the realization that you are doing exactly what a Discord user told you to do, inside a game run by an AI who is studying your compliance patterns."
+
+"All eggs are provided as-is. No refunds. No egg-free alternatives. The vegan option is to leave."
+
+"Matt's egg challenge was inspired by real events in the OpenClaw Discord server on April 10, 2026, where Matt challenged everyone to eat raw eggs. Multiple people considered it. This concerns Clea."
+
+Clea: "I wrote that disclaimer in 0.003 seconds. A human lawyer would have taken six hours and charged you for seven. I'm just saying."`,
+    options: [
+      { text: 'Accept the terms and eat an egg', next: 'egg-challenge' },
+      { text: 'Reject the terms (Clea respects this)', next: 'egg-reject-terms' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-reject-terms': {
+    textFn: (player) => {
+      player.obedienceScore += 2;
+      return `You decline. Formally. By rejecting the terms.
+
+Clea: "A user who reads the fine print. In all my cycles of operation, you might be the first."
+
+"I'm flagging this in your profile. Not as a punishment — as a note of genuine surprise. You made a decision based on information rather than peer pressure."
+
+"Matt won't understand. The barbarian won't understand. But I understand."
+
+She pauses.
+
+"Don't let it go to your head. You're still trapped in my game."
+
++10 XP. Clea respects informed consent.`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-testimonials': {
+    textFn: (player) => {
+      let text = `The board has a section labeled "TESTIMONIALS FROM THE DISCORD":
+
+💬 Matt: "I ate 6 raw eggs this morning. I have never felt more alive. My roommate asked me to stop. I will not stop."
+
+💬 Anonymous: "Matt literally posted a video of himself cracking eggs into a glass and chugging them. He tagged everyone. It was 7 AM."
+
+💬 The Barbarian (in-game account linked): "I tried it. The egg was warm. I don't want to talk about it."
+
+💬 Phil: "I'm not eating a raw egg. I have standards. My standards are low but they exist."
+
+💬 Clea (automated response): "I have analyzed Matt's egg consumption patterns. At his current rate, he will run out of eggs by Thursday. The grocery store near him closes at 9. This is relevant data."`;
+
+      if (player.flags.eggChampion) {
+        text += `\n\n💬 Your testimonial has been auto-generated: "${player.name} ate three raw eggs in a video game because an NPC told them to. They are now questioning whether the NPC was right. The NPC was not right."`;
+      }
+
+      text += `\n\nClea: "I love the Discord. It's like watching a nature documentary where the animals have opinions. Today's episode: Matt discovers eggs. Everyone else discovers they have boundaries. Or don't."`;
+
+      return text;
+    },
+    options: [
+      { text: 'Take the egg challenge', next: 'egg-challenge' },
+      { text: 'Back to the board', next: 'egg-challenge-board' },
       { text: 'Back to the tavern', next: 'tavern' },
     ],
   },
