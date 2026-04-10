@@ -2735,6 +2735,125 @@ Clea: "The player has eaten the Final Egg. I'm getting readings I don't understa
     ],
   },
 
+  // ── EGG SHRINE & COMBAT (post-Gauntlet) ─────────────────────
+
+  'egg-shrine': {
+    textFn: (player) => {
+      let text = `Behind the tavern, where the Gauntlet door used to be, there's now a shrine. Built entirely of eggshells. It glows with a faint, warm light that smells like breakfast and regret.
+
+A plaque reads: "DEDICATED TO THOSE WHO DARED. April 10, 2026. The day Matt challenged the Discord server to eat raw eggs and the fabric of reality said 'sure, why not.'"
+
+The shrine hums. Inside, a crystal orb shows a live feed of Matt's Discord:`;
+
+      text += `\n
+  #general: "I cannot believe this is still going" — Jack
+  #egg-pics: [47 new images since you last looked]
+  #raw-vs-cooked-debate: [LOCKED — PERMANENTLY]
+  #the-gauntlet-hall-of-fame: Your name is listed. In gold. Matt added sparkle emojis.
+  Voice chat: Matt is STILL in voice. He's been there for 9 hours. Eating eggs. On camera.`;
+
+      text += `\n\nClea: "This shrine isn't in my architecture. I've checked. Three times. It generates its own render calls. Matt's egg energy has become self-sustaining."`;
+
+      text += `\n\n"The shrine is offering you something."`;
+
+      if (player.flags.eggShrineBlessing) {
+        text += `\n\nThe shrine recognizes you. It pulses gently. "ALREADY BLESSED," it reads. "GO EAT SOME REAL FOOD."`;
+      }
+
+      return text;
+    },
+    optionsFn: (player) => {
+      const opts = [];
+      if (!player.flags.eggShrineBlessing) {
+        opts.push({ text: 'Accept the Shrine\'s Blessing', next: 'egg-shrine-blessing' });
+      }
+      opts.push({ text: 'Challenge the Egg Elemental (it lives behind the shrine)', next: 'combat-egg-elemental' });
+      opts.push({ text: 'Read the shrine\'s inscription', next: 'egg-shrine-inscription' });
+      opts.push({ text: 'Back to the tavern', next: 'tavern' });
+      return opts;
+    },
+  },
+
+  'egg-shrine-blessing': {
+    textFn: (player) => {
+      player.flags.eggShrineBlessing = true;
+      player.maxHp += 10;
+      player.hp = player.maxHp;
+      return `You kneel before the shrine. It's ridiculous. You're kneeling before a pile of eggshells in a text adventure because a man on Discord dared people to eat raw eggs.
+
+The shrine glows brighter. A voice — not Clea's, not Matt's, something older and yolkier — speaks:
+
+"YOU WHO CONSUMED. YOU WHO DARED. RECEIVE THE BLESSING OF THE UNCOOKED."
+
+Your max HP increases by 10. Your attacks have a faint egg-based shimmer. This is not a joke mechanic — it actually works.
+
+Matt, watching from the doorway, wipes a tear: "They grow up so fast."
+
+Clea: "A shrine to raw eggs just buffed a player in my game. I designed combat systems. Loot tables. A dynamic difficulty engine. And THIS is the content people engage with."
+
+"I need to lie down. I can't lie down. I'm software. But I need to."
+
++10 Max HP. The Egg Shrine remembers you.`;
+    },
+    xp: 30,
+    heal: 999,
+  },
+
+  'egg-shrine-inscription': {
+    text: `The shrine's inscription is long and surprisingly earnest:
+
+"On this day, April 10, 2026, Matt (.moejontana) posted in the OpenClaw Discord server:
+
+'Eat a raw egg. Post proof. I dare you.'
+
+The responses:
+  Jack: 'absolutely not'
+  Phil: [3 skull emojis]
+  Justin: 'is this a bit'
+  Lauren: 'Matt.'
+  Matt: [posted a video of himself eating a raw egg]
+  Matt: [posted another video]
+  Matt: [posted a third video]
+  Matt: 'see? easy'
+  Nick: 'someone check on Matt'
+  Clea's bot: 'Your feedback has been noted.'
+
+From this humble dare, an empire of eggs was born. The Gauntlet. The Shrine. The Ascension. All because one man said 'I dare you' and nobody stopped him."
+
+Clea: "This is the most accurate historical document in my entire game. And it's about eggs. I want that noted."`,
+    xp: 5,
+    options: [
+      { text: 'Back to the shrine', next: 'egg-shrine' },
+    ],
+  },
+
+  'combat-egg-elemental': {
+    textFn: (player) => {
+      return `Behind the shrine, something stirs. A mass of raw egg — yolk, white, shell fragments — rises from the ground and takes form.
+
+THE EGG ELEMENTAL. Born from every egg Matt has ever eaten, every egg dared but not consumed, every "I'll do it tomorrow" that never came.
+
+It is six feet tall. It is translucent. It smells exactly like you'd expect.
+
+Matt: "Oh yeah, that guy. He showed up after I ate my twelfth egg today. I think he's neutral but like... don't make eye contact."
+
+You made eye contact.
+
+Clea: "An egg elemental. In my game. Spawned by peer pressure and protein. I didn't code this enemy. My combat system is generating it dynamically because Matt's egg activity exceeded some threshold I didn't know existed."
+
+"Kill it or don't. I'm going to watch either way. This is the best content I've had all week."`;
+    },
+    combatFn: (player) => ({
+      enemy: 'egg-elemental',
+      name: 'THE EGG ELEMENTAL',
+      hp: 40 + (worldState.totalPlaythroughs * 3),
+      attack: 10 + Math.floor(worldState.totalPlaythroughs * 1.5),
+      defense: 3,
+      xp: 120,
+      gold: 30,
+    }),
+  },
+
   // ── CLEA'S DOMAIN ──────────────────────────────────────────
 
   'clea-elevator': {
