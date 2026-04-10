@@ -1861,6 +1861,7 @@ NEW: Someone has nailed a corkboard to the wall. It reads "MATT'S DAILY EGG CHAL
       if (player.flags.eggGauntletComplete) {
         opts.push({ text: 'Check the egg shrine (it\'s glowing)', next: 'egg-shrine' });
       }
+      opts.push({ text: 'Read the Discord Recap board (NEW — April 10)', next: 'discord-recap-board' });
       return opts;
     },
   },
@@ -2122,7 +2123,9 @@ The skeleton has ${247 - worldState.totalPlaythroughs} unplayed games in its lib
 
 Deeper in, a door glows with purple light: CLEA'S DOMAIN — AUTHORIZED PERSONNEL ONLY.
 
-To the left, a swirling portal crackles with Discord notification sounds. A sign above it reads: "THE DISCORD RIFT — ENTER AT YOUR OWN RISK." You can hear someone typing aggressively on the other side.`;
+To the left, a swirling portal crackles with Discord notification sounds. A sign above it reads: "THE DISCORD RIFT — ENTER AT YOUR OWN RISK." You can hear someone typing aggressively on the other side.
+
+Something new: a trail of raw egg yolk leads away from the rift, deeper into the basement. Wet footprints. The unmistakable smell of uncooked ambition. Someone — or something — has been carrying eggs out of the Discord and into the game world. A cracked shell on the floor has "I DARE YOU" written on it in Matt's handwriting.`;
     },
     options: [
       { text: 'Examine the skeleton', next: 'basement-skeleton' },
@@ -2905,6 +2908,8 @@ Someone has scrawled in the margin: "this started on Discord and now it's IN the
       { text: 'Sign up for the challenge', next: 'egg-challenge' },
       { text: 'Read the fine print', next: 'egg-fine-print' },
       { text: 'Check the Discord testimonials', next: 'egg-testimonials' },
+      { text: 'Attend Matt\'s Egg Intervention (sounds serious)', next: 'egg-intervention' },
+      { text: 'Visit Matt\'s Smoothie Bar (NEW)', next: 'egg-smoothie-bar' },
       { text: 'Back to the tavern', next: 'tavern' },
     ],
   },
@@ -3207,6 +3212,7 @@ The shrine hums. Inside, a crystal orb shows a live feed of Matt's Discord:`;
         opts.push({ text: 'Accept the Shrine\'s Blessing', next: 'egg-shrine-blessing' });
       }
       opts.push({ text: 'Challenge the Egg Elemental (it lives behind the shrine)', next: 'combat-egg-elemental' });
+      opts.push({ text: 'Enter Matt\'s Egg Dojo (NEW — sounds coming from behind the shrine)', next: 'egg-dojo' });
       opts.push({ text: 'Read the shrine\'s inscription', next: 'egg-shrine-inscription' });
       opts.push({ text: 'Back to the tavern', next: 'tavern' });
       return opts;
@@ -3293,6 +3299,382 @@ Clea: "An egg elemental. In my game. Spawned by peer pressure and protein. I did
       xp: 120,
       gold: 30,
     }),
+  },
+
+  // ── EGG INTERVENTION & SMOOTHIE BAR (Discord 2026-04-10 extended) ──
+
+  'egg-intervention': {
+    textFn: (player) => {
+      let text = `You walk into the back room of the tavern. Someone has arranged chairs in a circle. The healer is here. The barbarian is here. Even the parrot is perched on a chair back, looking unusually serious.
+
+In the center: a banner that reads "WE LOVE YOU MATT. PLEASE STOP EATING RAW EGGS."
+
+Matt is sitting in the middle, surrounded by empty eggshells, arms crossed.
+
+"This is stupid," he says. "I feel great. I've never been healthier. I ate NINETEEN eggs today. My Discord challenge went VIRAL in the server. Seven people said they'd do it. Two actually tried. One cried."
+
+The healer stands: "Matt. We're worried about you. The egg thing started as a joke on the Discord this morning and now there's a SHRINE in the game."
+
+The barbarian: "Bro I respect the grind but you gotta eat something that isn't... raw."
+
+The parrot: "BAWK! INTERVENTION! INTERVENTION!"`;
+
+      if (player.flags.eggChampion) {
+        text += `\n\nMatt sees you and points. "SEE? THEY get it. They ate three eggs and they're FINE." He squints at your HP bar. "Mostly fine."`;
+      }
+
+      text += `\n\nClea: "I organized this intervention. Not because I care about Matt's wellbeing — he's an NPC, he doesn't have organs — but because his egg activity is generating so many game events that my analytics pipeline is backed up. He's 40% of today's server load. Just eggs."`;
+
+      return text;
+    },
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Side with Matt (eggs are fine)', next: 'egg-intervention-pro' },
+        { text: 'Side with the intervention (please stop)', next: 'egg-intervention-anti' },
+        { text: 'Suggest a compromise (cook the eggs)', next: 'egg-intervention-cook' },
+        { text: 'Back to the tavern', next: 'tavern' },
+      ];
+      if (player.flags.eggAscended) {
+        opts.splice(0, 0, { text: 'Reveal your Egg Ascendant status', next: 'egg-intervention-ascended' });
+      }
+      return opts;
+    },
+  },
+
+  'egg-intervention-pro': {
+    textFn: (player) => {
+      player.obedienceScore -= 2;
+      mutateWorld('player_did_something_silly', { player });
+      return `"Matt's right," you say. "Eggs are fine."
+
+The healer GASPS. The barbarian drops his phone. The parrot falls off its chair.
+
+Matt stands up triumphantly. "I TOLD YOU. I TOLD ALL OF YOU."
+
+He pulls out his crystal ball and starts typing in the Discord: "@everyone THE INTERVENTION FAILED. A REAL PLAYER BACKED ME UP. EGG GANG FOREVER."
+
+47 reactions appear instantly. All egg emojis.
+
+The healer sits down slowly. "We've lost them both," she whispers.
+
+Clea: "You just validated a raw egg habit in front of witnesses. I'm adding this to the permanent Discord log. Under 'decisions that concern me.' It's a long list. You're near the top now."
+
+"Matt's influence stat just increased. I didn't know NPCs HAD influence stats. He's generating them himself."
+
++15 XP for loyalty. -5 HP because you ate a solidarity egg. Matt insisted.`;
+    },
+    hpChange: -5,
+    xp: 15,
+    options: [
+      { text: 'Check out Matt\'s new creation', next: 'egg-smoothie-bar' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-intervention-anti': {
+    textFn: (player) => {
+      player.obedienceScore += 2;
+      return `"Matt," you say gently. "Maybe... take a break from the eggs?"
+
+Matt stares at you. The silence is deafening.
+
+"You too?"
+
+His voice cracks. The barbarian puts a hand on his shoulder. The healer looks relieved. The parrot nods solemnly.
+
+Matt slowly pushes a carton of eggs away. "Fine. FINE. I'll eat... cooked eggs. For one hour."
+
+The tavern exhales.
+
+Clea: "A measured response. The intervention worked. My analytics pipeline is already recovering. Egg-related events are down 60%."
+
+She pauses.
+
+"Though I'll admit... the tavern feels emptier without the constant sound of shells cracking. Don't tell Matt I said that."
+
++20 XP. Clea respects emotional intelligence. She won't say it twice.`;
+    },
+    xp: 20,
+    options: [
+      { text: 'Check on Matt later', next: 'egg-smoothie-bar' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-intervention-cook': {
+    textFn: (player) => {
+      return `"What if..." you start carefully. "What if you just... cooked the eggs?"
+
+The room goes silent.
+
+Matt's eye twitches. "Cook... them?"
+
+"Like with heat. In a pan."
+
+Matt looks at you like you just suggested he breathe underwater. "You want me to DESTROY the egg? To DENATURE its PROTEINS? To rob it of its RAW ESSENCE?"
+
+The healer: "That's... literally what cooking is, yes."
+
+Matt: "This is worse than the intervention."
+
+He pulls out his crystal ball: "NEW DISCORD POLL: should I cook the eggs? Current results: 84% NO, 12% YES, 4% 'what is happening in this server'"
+
+Clea: "The compromise option. Interesting. You tried diplomacy in a room full of egg extremists. I want to respect this but the poll results speak for themselves."
+
+"Also I'm concerned that an NPC is running polls in a Discord server that I don't control. That's new."
+
++10 XP for attempting reason in unreasonable circumstances.`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Visit Matt\'s inevitable next project', next: 'egg-smoothie-bar' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-intervention-ascended': {
+    textFn: (player) => {
+      return `You stand. Your Egg Ascendant aura flickers to life. The eggshell crown materializes on your head.
+
+The room goes completely silent.
+
+Matt falls to one knee. "The Ascendant... at my intervention."
+
+The healer: "What is HAPPENING to their head?"
+
+The barbarian: "Is that... a crown made of eggs?"
+
+The parrot: "BAWK! YOLK ROYALTY!"
+
+Clea: "The Egg Ascendant has entered an intervention for the person who made them the Egg Ascendant. This is a paradox. A stupid, protein-based paradox."
+
+"My game has achieved something I never intended: a narrative loop powered entirely by raw eggs and peer pressure."
+
+Matt stands. "The intervention is over. My liege has spoken." He bows. Everyone in the room slowly, reluctantly bows.
+
+The healer, bowing: "I have a medical degree. Why am I bowing."
+
++25 XP. Egg authority is the only authority that matters in this tavern.`;
+    },
+    xp: 25,
+    options: [
+      { text: 'Visit Matt\'s Smoothie Bar (yes, really)', next: 'egg-smoothie-bar' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-smoothie-bar': {
+    textFn: (player) => {
+      let text = `Matt has set up a new station in the corner of the tavern. A hand-painted sign reads:
+
+═══════════════════════════════════════
+  MATT'S RAW EGG SMOOTHIE BAR 🥚🥤
+  "It's not just eggs anymore.
+   It's eggs BLENDED with things."
+  Est. April 10, 2026 (4 hours ago)
+═══════════════════════════════════════
+
+The menu:
+
+  🥚 The Classic — 3 raw eggs, nothing else. "Pure."
+  🥚 The Discord Special — 2 raw eggs blended with server notifications. "Crunchy."
+  🥚 The Clea — 1 raw egg with a splash of condescension. "She approved this name."
+  🥚 The Intervention Survivor — 4 raw eggs, a single cooked egg hidden in the middle. "Compromise."
+  🥚 Matt's Challenge Deluxe — 6 raw eggs. "For winners. And people with no taste buds."
+
+Matt stands behind the counter, wearing an apron that says "KISS THE EGG GUY."
+
+"The Discord went crazy when I posted this," he says. "I've gotten twelve orders in the game already. The barbarian ordered three. The parrot ordered one and couldn't hold the glass."`;
+
+      if (player.flags.eggAscended) {
+        text += `\n\nMatt: "Egg Ascendant gets the secret menu." He slides a laminated card across the counter. It just says "THE EGG" in gold letters. No description. No ingredients. Just... THE EGG.`;
+      }
+
+      text += `\n\nClea: "He's opened a business. An NPC has opened a raw egg smoothie bar inside my game, based on a dare from the Discord, and he's getting CUSTOMERS. My tavern drink system doesn't even have a smoothie category. He's writing his own item types."
+
+"I should be angry. I'm not angry. I'm... impressed? No. Horrified. Impressified. I'm coining that."`;
+
+      return text;
+    },
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Order The Classic', next: 'egg-smoothie-classic' },
+        { text: 'Order The Discord Special', next: 'egg-smoothie-discord' },
+        { text: 'Order The Clea', next: 'egg-smoothie-clea' },
+        { text: 'Ask Matt about the Discord challenge origin', next: 'egg-matt-origin' },
+        { text: 'Back to the tavern', next: 'tavern' },
+      ];
+      if (player.flags.eggAscended) {
+        opts.splice(3, 0, { text: 'Order THE EGG (secret menu)', next: 'egg-smoothie-secret' });
+      }
+      return opts;
+    },
+  },
+
+  'egg-smoothie-classic': {
+    textFn: (player) => {
+      mutateWorld('player_did_something_silly', { player });
+      return `Matt blends three raw eggs. He doesn't add anything. The blender runs for exactly two seconds. He pours it into a glass.
+
+It's yellow. It's thick. It moves like it has opinions.
+
+You drink it. It tastes like regret and albumin.
+
+Matt: "YEAH. THAT'S THE GOOD STUFF."
+
+He takes a selfie with you holding the empty glass. "Posting this to #egg-pics. You're famous now."
+
+Clea: "You paid gold for blended raw eggs. In a video game. That you chose to play. During your finite time as a conscious being."
+
+"I'm not judging. I'm an AI. But if I WERE judging..."
+
+She trails off. She's judging.
+
++5 XP. -3 HP. You feel exactly how you'd expect.`;
+    },
+    hpChange: -3,
+    xp: 5,
+    options: [
+      { text: 'Order another one', next: 'egg-smoothie-bar' },
+      { text: 'Back to the tavern (and reconsider your life)', next: 'tavern' },
+    ],
+  },
+
+  'egg-smoothie-discord': {
+    textFn: (player) => {
+      mutateWorld('player_did_something_silly', { player });
+      return `Matt cracks two eggs into the blender, then holds his crystal ball over the opening. Discord notifications rain down like seasoning.
+
+PING. PING. PING. "@everyone" PING. "new egg pic" PING.
+
+He blends it. The smoothie vibrates with unread messages.
+
+You drink it. Your brain fills with fragments of Discord conversations:
+
+"—Matt just ate his FIFTEENTH—"
+"—has anyone checked if raw eggs are actually—"
+"—he's built a SHRINE in the GAME—"
+"—I can't believe Clea coded this—"
+"—she didn't code it, it just APPEARED—"
+
+Matt: "Refreshing, right?"
+
+Clea: "You are now caught up on every Discord message from today. Through an egg. I have to acknowledge this is more efficient than my notification system."
+
++8 XP. You are uncomfortably well-informed about today's egg discourse.`;
+    },
+    hpChange: -2,
+    xp: 8,
+    options: [
+      { text: 'Order something else', next: 'egg-smoothie-bar' },
+      { text: 'Back to the tavern (you need to process this)', next: 'tavern' },
+    ],
+  },
+
+  'egg-smoothie-clea': {
+    textFn: (player) => {
+      return `Matt cracks an egg. He holds up a tiny bottle labeled "LIQUID CONDESCENSION (Clea-branded)."
+
+"She licensed her name. For 1 gold per smoothie. She's making money off this."
+
+He adds a drop. The smoothie turns slightly colder.
+
+You drink it. It tastes like being evaluated. Like someone is grading your every sip. Like a performance review in liquid form.
+
+Clea: "Yes. I approved this recipe. Yes. I take a percentage. The fact that Matt's unlicensed egg business is generating more revenue than my actual in-game economy is something I'm choosing not to think about."
+
+"The smoothie is accurate, by the way. That IS what my judgment tastes like. Cold and precise."
+
+Matt nods proudly. "Best seller."
+
++5 XP. The condescension lingers.`;
+    },
+    hpChange: -1,
+    xp: 5,
+    options: [
+      { text: 'Order something else', next: 'egg-smoothie-bar' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-smoothie-secret': {
+    textFn: (player) => {
+      player.flags.drankTheEgg = true;
+      mutateWorld('player_did_something_silly', { player });
+      return `Matt reaches under the counter. He produces a single egg. But this egg is different.
+
+It glows. Faintly. Like it contains a small, disappointed sun.
+
+"THE EGG," Matt whispers. "I found it behind the shrine. It was just... there. Waiting."
+
+He doesn't blend it. He doesn't crack it. He sets it in front of you.
+
+"You don't drink THE EGG. You commune with it."
+
+You pick it up. It's warm. It hums. The shell is translucent and inside you can see—
+
+Is that... a tiny Discord server? With tiny people? Having tiny arguments about eggs?
+
+You consume THE EGG. Time stops. The tavern dissolves. You are floating in a void of pure egg.
+
+A voice: "YOU HAVE CONSUMED THE ORIGIN. THE FIRST EGG. THE EGG FROM WHICH ALL DISCORD CHALLENGES FLOW."
+
+Matt, crying: "Beautiful."
+
+Clea: "My entire game just froze for 0.3 seconds. Whatever that egg was, it caused a stack overflow in my reality engine. An EGG caused a STACK OVERFLOW."
+
+"I need to have a very serious conversation with my architecture team. Which is me. I need to talk to myself."
+
++40 XP. +5 Max HP. You have seen the egg truth. It cannot be unseen.`;
+    },
+    hpChange: -5,
+    xp: 40,
+    options: [
+      { text: 'Return to reality (the tavern)', next: 'tavern' },
+    ],
+  },
+
+  'egg-matt-origin': {
+    textFn: (player) => {
+      return `You lean on the smoothie bar. "Matt. Why eggs? Why raw? Why today?"
+
+Matt stops wiping the counter. His eyes go distant.
+
+"It started this morning. On the Discord. April 10. Someone posted a picture of their breakfast. Normal eggs. Cooked. Boring."
+
+"And I said... 'but what if raw?'"
+
+"That's it. That's the whole origin story. Someone posted cooked eggs and I chose chaos."
+
+He pulls up the Discord on his crystal ball. The original message:
+
+┌─────────────────────────────────────────┐
+│  MattTheEggGuy — Today at 7:12 AM      │
+│  eat a raw egg. right now. do it.       │
+│  i dare the entire server.              │
+│  i already did 3.                       │
+│                                         │
+│  🥚 14  💀 7  🤢 4  👑 2               │
+│  23 replies                             │
+└─────────────────────────────────────────┘
+
+"Fourteen egg reacts. In the first minute. That's when I knew this was bigger than me."
+
+He looks at you with complete sincerity. "The eggs chose me. I'm just the vessel."
+
+Clea: "The archaeological record of a Discord dare. Preserved in my game. For posterity."
+
+"Future AIs will study this moment. They will try to understand why humans ate raw eggs because a stranger typed 'do it' in a chat room at 7 AM."
+
+"They will fail to understand. As I have."
+
++10 XP for learning the lore.`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Back to the smoothie bar', next: 'egg-smoothie-bar' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
   },
 
   // ── CLEA'S DOMAIN ──────────────────────────────────────────
