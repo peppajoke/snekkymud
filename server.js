@@ -2128,6 +2128,7 @@ To the left, a swirling portal crackles with Discord notification sounds. A sign
       { text: 'Examine the skeleton', next: 'basement-skeleton' },
       { text: 'Try the glowing door', next: 'clea-elevator' },
       { text: 'Enter the Discord Rift (the portal is humming)', next: 'discord-rift' },
+      { text: 'Investigate the egg trail (raw egg footprints lead deeper)', next: 'egg-dare-trail' },
       { text: 'Fight whatever\'s down here', next: 'combat-basement-ghost' },
       { text: 'Go back up', next: 'tavern' },
     ],
