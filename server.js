@@ -2120,11 +2120,14 @@ A skeleton sits in the corner surrounded by unfinished games. It didn't quit the
 
 The skeleton has ${247 - worldState.totalPlaythroughs} unplayed games in its library. (It keeps growing.)
 
-Deeper in, a door glows with purple light: CLEA'S DOMAIN — AUTHORIZED PERSONNEL ONLY.`;
+Deeper in, a door glows with purple light: CLEA'S DOMAIN — AUTHORIZED PERSONNEL ONLY.
+
+To the left, a swirling portal crackles with Discord notification sounds. A sign above it reads: "THE DISCORD RIFT — ENTER AT YOUR OWN RISK." You can hear someone typing aggressively on the other side.`;
     },
     options: [
       { text: 'Examine the skeleton', next: 'basement-skeleton' },
       { text: 'Try the glowing door', next: 'clea-elevator' },
+      { text: 'Enter the Discord Rift (the portal is humming)', next: 'discord-rift' },
       { text: 'Fight whatever\'s down here', next: 'combat-basement-ghost' },
       { text: 'Go back up', next: 'tavern' },
     ],
@@ -3969,6 +3972,8 @@ const itemData = {
   'champions-egg': { type: 'weapon', attack: 2, description: 'A raw egg with CHAMP written on it. +2 ATK. It smells. Clea: "I cannot believe this is a weapon."' },
   'egg-ascendant-crown': { type: 'armor', defense: 3, attack: 3, description: 'A crown made of eggshells. It glows faintly. Matt cried when he gave it to you. +3 ATK, +3 DEF. Clea: "You earned this by eating eggs. I want that on the record."' },
   'yolk-of-the-fallen': { type: 'consumable', heal: 25, description: 'A golden yolk that dropped from the Egg Elemental. Heals 25 HP. Tastes like victory and raw albumen. Matt: "The elemental died as it lived — runny."' },
+  'mute-amulet': { type: 'consumable', heal: 5, description: 'Blocks notification damage. Blessed silence. Clea: "A premium feature. You\'re welcome."' },
+  'blessed-eggshell': { type: 'armor', defense: 1, description: 'A fragment from Matt\'s egg shrine. +1 DEF. Whispers "protein" when held to your ear.' },
 };
 
 // ============================================================
