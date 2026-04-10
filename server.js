@@ -2796,7 +2796,9 @@ Clea: "A shrine to raw eggs just buffed a player in my game. I designed combat s
 +10 Max HP. The Egg Shrine remembers you.`;
     },
     xp: 30,
-    heal: 999,
+    options: [
+      { text: 'Back to the shrine', next: 'egg-shrine' },
+    ],
   },
 
   'egg-shrine-inscription': {
