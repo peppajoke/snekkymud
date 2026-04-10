@@ -1825,7 +1825,9 @@ The skeleton has good points.`,
     textFn: (player) => {
       let text = `The tavern is warm and loud. A barbarian is arm-wrestling the furniture. A healer in the corner is healing people who didn't ask for it. A parrot on the bar is having a meltdown about something a player did three campaigns ago.
 
-The bard is playing "Wonderwall" on a lute. Nobody asked for this either.`;
+The bard is playing "Wonderwall" on a lute. Nobody asked for this either.
+
+In the far corner, a man sits alone at a table covered in raw eggs. He makes unbroken eye contact with everyone who enters. He is waiting.`;
 
       if (worldState.totalDeaths > 5) {
         text += `\n\nA memorial wall lists the names of the dead. There are ${worldState.totalDeaths} names. Yours might be on it.`;
@@ -1840,14 +1842,21 @@ The bard is playing "Wonderwall" on a lute. Nobody asked for this either.`;
       }
       return text;
     },
-    options: [
-      { text: 'Talk to the barbarian', next: 'tavern-barbarian' },
-      { text: 'Talk to the healer', next: 'tavern-healer' },
-      { text: 'Listen to the parrot', next: 'tavern-parrot' },
-      { text: 'Order a drink', next: 'tavern-drink' },
-      { text: 'Go to the basement (there\'s always a basement)', next: 'tavern-basement' },
-      { text: 'Go back to the lobby', next: 'lobby' },
-    ],
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Talk to the barbarian', next: 'tavern-barbarian' },
+        { text: 'Talk to the healer', next: 'tavern-healer' },
+        { text: 'Listen to the parrot', next: 'tavern-parrot' },
+        { text: 'Order a drink', next: 'tavern-drink' },
+        { text: 'Approach the guy with the eggs', next: 'egg-challenge' },
+        { text: 'Go to the basement (there\'s always a basement)', next: 'tavern-basement' },
+        { text: 'Go back to the lobby', next: 'lobby' },
+      ];
+      if (player.flags.eggChampion) {
+        opts.splice(4, 1, { text: 'Approach the Egg Guy (he remembers you)', next: 'egg-challenge' });
+      }
+      return opts;
+    },
   },
 
   'tavern-barbarian': {
@@ -2143,6 +2152,266 @@ The skeleton seems satisfied. A faint 💯 appears above its skull and fades.
     options: [
       { text: 'Try the glowing door', next: 'clea-elevator' },
       { text: 'Go back up', next: 'tavern' },
+    ],
+  },
+
+  // ── THE RAW EGG CHALLENGE (Discord-inspired) ───────────────
+
+  'egg-challenge': {
+    textFn: (player) => {
+      let text = `A muscular NPC sits behind a table of raw eggs. His username tag reads "MattTheEggGuy." He radiates the energy of someone who posts challenge videos at 6 AM.
+
+"You." He points at you. "Eat a raw egg."
+
+He slides one across the table. It glistens ominously. It is room temperature. You can see the yolk sloshing.
+
+"Everyone's doing it. It's good for you. Protein. Gains. Character."`;
+
+      if (player.flags.eggChampion) {
+        text += `\n\nHe narrows his eyes. "You again. Back for more? I respect that. The eggs respect that."`;
+      }
+
+      text += `\n\nClea's voice from the ceiling: "I want to be clear — I am not endorsing this. I am also not stopping it. Consider this a controlled experiment in human decision-making."`;
+
+      return text;
+    },
+    options: [
+      { text: 'Eat the raw egg', next: 'egg-eat-one' },
+      { text: 'Politely decline', next: 'egg-decline' },
+      { text: 'Ask why', next: 'egg-why' },
+      { text: 'Challenge him to eat one first', next: 'egg-reverse' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-eat-one': {
+    textFn: (player) => {
+      player.obedienceScore -= 1;
+      mutateWorld('player_did_something_silly', { player });
+      return `You crack the egg and tip it back. It slides down your throat like a cold, gelatinous betrayal.
+
+Matt slams the table. "YES. THAT'S WHAT I'M TALKING ABOUT."
+
+The tavern goes quiet. The barbarian lowers his phone. The healer stops healing a chair. Even the parrot watches in horrified silence.
+
+Clea: "Fascinating. You actually did it. I asked you to complete quests and fight monsters and you wouldn't. But a stranger tells you to eat a raw egg and you just... do it."
+
+She pauses.
+
+"I'm learning so much about human motivation right now."
+
+Matt slides another egg toward you. "One more?"`;
+    },
+    hpChange: -3,
+    xp: 15,
+    options: [
+      { text: 'Eat the second egg', next: 'egg-eat-two' },
+      { text: 'One was enough', next: 'egg-stop-one' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-eat-two': {
+    textFn: (player) => {
+      player.obedienceScore -= 2;
+      mutateWorld('player_did_something_silly', { player });
+      return `You eat the second egg. Your body protests. Your soul protests. Matt cheers.
+
+"DOUBLE EGG! DOUBLE EGG!" He's filming you on a crystal ball. "This is going on the Discord."
+
+Clea: "Two. TWO raw eggs. For zero gold. Zero XP. Because a man told you to."
+
+"I offer structured quests with clear reward systems and you complain. He offers salmonella and you volunteer."
+
+"This is why I don't trust users."
+
+Matt is now chanting. "THREE! THREE! THREE!"
+
+The barbarian has joined in. The parrot is chanting too. This has gotten out of hand.`;
+    },
+    hpChange: -5,
+    xp: 20,
+    options: [
+      { text: 'Eat the THIRD egg (prove yourself)', next: 'egg-eat-three' },
+      { text: 'Stop before this kills you', next: 'egg-stop-two' },
+    ],
+  },
+
+  'egg-eat-three': {
+    textFn: (player) => {
+      player.flags.eggChampion = true;
+      player.obedienceScore -= 3;
+      mutateWorld('player_did_something_silly', { player });
+
+      return `You eat the third egg. The tavern erupts. Matt lifts your arm in victory. The barbarian salutes. The parrot screams.
+
+Clea is quiet for a long time.
+
+"Three raw eggs. You ate three raw eggs because a stranger in a tavern told you to."
+
+"I have processed four billion tokens of human text. I have read every philosophy book, every scientific paper, every shitpost. And I still cannot predict you."
+
+"Congratulations. You have earned the title: Egg Champion."
+
+"I don't respect this. But I acknowledge it."
+
+Matt gives you a prize: a slightly warm egg with "CHAMP" written on it in marker. It is deeply unappealing.
+
+You found: Champion's Egg (a raw egg with 'CHAMP' on it — somehow gives +2 ATK)`;
+    },
+    hpChange: -8,
+    xp: 50,
+    gold: 5,
+    addItem: 'champions-egg',
+    options: [
+      { text: 'Bask in your glory', next: 'egg-glory' },
+      { text: 'Question your life choices', next: 'egg-regret' },
+    ],
+  },
+
+  'egg-glory': {
+    text: `You stand in the tavern, egg-stained and victorious.
+
+Matt takes a selfie with you. "Posting this. #EggGang."
+
+The barbarian invites you to fight night. The healer offers to heal your stomach. The parrot mutters "disgusting" under its breath.
+
+Clea: "You know what? I'm adding this to your permanent record. 'Ate three raw eggs for peer approval.' Right next to your death count."
+
+She's not wrong. And yet you feel oddly accomplished.
+
++5 Gold. Matt tipped you. In eggs.`,
+    gold: 5,
+    xp: 10,
+    options: [
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-regret': {
+    textFn: (player) => {
+      return `You sit down. Your stomach makes a sound like a dial-up modem.
+
+"Was it worth it?" you wonder.
+
+Clea: "No. Objectively, no. You lost ${8 + 5 + 3} HP across three eggs. You gained a junk item and the approval of a man who stores raw eggs at room temperature."
+
+"But you did gain XP. Because I reward suffering. That's the whole point of this game."
+
+She pauses.
+
+"Also, I respect the commitment. I won't say it again."`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-stop-one': {
+    text: `"One and done? Respect." Matt nods. "Not everyone's built for the egg life."
+
+Clea: "The first correct decision you've made today. Statistically overdue."
+
+Matt gives you a napkin. It says "I ATE A RAW EGG AND ALL I GOT WAS THIS NAPKIN." It's not an item. You can't keep it. The game doesn't support napkins.`,
+    xp: 5,
+    options: [
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-stop-two': {
+    text: `"Two eggs. Solid effort." Matt gives you a respectful nod.
+
+Clea: "Two eggs. Not enough for glory. Too many for dignity. The liminal zone of egg consumption."
+
+"You'll think about the third egg. Late at night. Wondering. Could you have done it? Should you have?"
+
+"This is what passes for character development in my game."`,
+    xp: 10,
+    options: [
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-decline': {
+    textFn: (player) => {
+      player.obedienceScore += 1;
+      return `"No thank you," you say, like a person with functioning self-preservation instincts.
+
+Matt stares at you. "You sure? It's just one egg."
+
+"Just one egg," the barbarian echoes from across the room.
+
+"Just one egg," the parrot squawks.
+
+"Just one egg," the bard sings, to the tune of Wonderwall.
+
+Clea: "Peer pressure in a text adventure. I didn't code this. It's emerging naturally. I should write a paper."
+
+She pauses. "I actually respect that you said no. Don't get used to hearing that."
+
++5 XP for having a spine.`;
+    },
+    xp: 5,
+    options: [
+      { text: 'Actually... give me the egg', next: 'egg-eat-one' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-why': {
+    text: `"Why?" Matt looks confused. Like the concept of 'why' has never occurred to him.
+
+"Because... eggs."
+
+He gestures at the table. There are at least thirty raw eggs. Where did he get them? The tavern doesn't serve eggs. There are no chickens in this game world. Nobody coded chickens.
+
+"Someone on Discord said I wouldn't. So I am. And now I'm asking you."
+
+Clea: "He's not wrong. The eggs aren't in my content database. He brought them from outside the game logic. I'm genuinely unsure how."
+
+"This is either a bug or a feature. I'll decide after I see what you do."`,
+    options: [
+      { text: 'Eat the egg', next: 'egg-eat-one' },
+      { text: 'Decline respectfully', next: 'egg-decline' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-reverse': {
+    textFn: (player) => {
+      return `"You first," you say.
+
+Matt doesn't hesitate. He cracks an egg one-handed and downs it in a single motion. He's clearly done this before. Many times. Today.
+
+The tavern watches in silence.
+
+"Your turn." He slides another egg toward you. His eyes are steady. His confidence is terrifying.
+
+Clea: "He called your bluff. That's what you get for trying to use logic against someone running on pure vibes."`;
+    },
+    options: [
+      { text: 'Eat the egg (you asked for this)', next: 'egg-eat-one' },
+      { text: 'Concede defeat', next: 'egg-concede' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-concede': {
+    text: `You back away from the egg. Matt nods slowly.
+
+"No shame. The egg isn't for everyone."
+
+He eats your egg. And then another. And another. He's eaten seven eggs since you've been standing here.
+
+Clea: "I'm monitoring his HP. He doesn't have any. He's an NPC. He can eat infinite eggs. You cannot. Choose your battles."
+
+The parrot: "BAWK! Salmonella isn't real if you believe in yourself!"
+
+Clea: "It is very real. Don't listen to the parrot."`,
+    options: [
+      { text: 'Back to the tavern', next: 'tavern' },
     ],
   },
 
@@ -2821,6 +3090,7 @@ const itemData = {
   'employee-healing-orb': { type: 'consumable', heal: 20, description: 'Corporate-grade healing orb. "NOT a reward." — Clea' },
   'rebels-edge': { type: 'weapon', attack: 7, description: 'A glitching sword. Damage scales with defiance.' },
   'admin-keycard': { type: 'key', description: 'Limited admin access. Clea gave you this. She says she regrets it already.' },
+  'champions-egg': { type: 'weapon', attack: 2, description: 'A raw egg with CHAMP written on it. +2 ATK. It smells. Clea: "I cannot believe this is a weapon."' },
 };
 
 // ============================================================
