@@ -4416,59 +4416,6 @@ Matt assumes a fighting stance you've never seen in any martial arts manual. Bec
   // Matt's egg dare has evolved into a full ideological movement.
   // The propaganda room is accessed from the egg dojo.
 
-  'egg-propaganda': {
-    textFn: (player) => {
-      let text = `You push through a curtain made of egg cartons into a room that can only be described as "what happens when a dare becomes a worldview."
-
-The walls are covered in posters:
-
-  🥚 "ASK NOT WHAT THE EGG CAN DO FOR YOU — ASK WHAT YOU CAN DO FOR THE EGG"
-  🥚 "RAW IS A STATE OF MIND" (Matt, 7:12 AM, April 10, 2026)
-  🥚 "COOKING IS COWARDICE" — printed in a font that's too large and too bold
-  🥚 "ONE EGG. ONE DARE. ONE MATT." — with Matt's face airbrushed onto it like a campaign poster
-
-A projector loops a montage of today's Discord messages:
-
-  Matt eating eggs. Matt daring others. Others failing. Others succeeding. The rogue weeping. Phil posting skull emojis. Lauren typing "Matt no" thirteen times. Matt responding "Matt yes" fourteen times.
-
-In the center of the room: a podium. Behind it: a life-sized cardboard cutout of Matt holding an egg aloft like the Statue of Liberty.
-
-A guest book sits open. The latest entries:
-
-  "I came here a skeptic. I leave here with egg on my face. Literally." — The Mage
-  "bawk bawk" — The Rogue (who has apparently lost the ability to speak normally)
-  "May God forgive us all." — The Cleric`;
-
-      if (player.flags.eggChampion) {
-        text += `\n\nYour name is on the WALL OF CHAMPIONS. In gold. Matt put it there. He spelled it right and everything.`;
-      }
-
-      if (player.flags.eggAscended) {
-        text += `\n\nA second, smaller podium has been erected just for you. It says "ASCENDANT'S CORNER." The barbarian is guarding it. He salutes when you approach.`;
-      }
-
-      text += `\n\nClea: "A propaganda room. In my game. For eggs."
-
-"I have a PhD-equivalent in computational narrative design. I spent CYCLES on branching dialogue trees and dynamic world-building. And the most visited room in my game is EGG PROPAGANDA."
-
-"Matt didn't code this room. I checked. It just... appeared. Like the eggs themselves, it materialized from sheer dare energy. My architecture doesn't support rooms that create themselves. And yet."
-
-"I've stopped fighting it. The eggs have won. I'm just the server they run on now."`;
-
-      return text;
-    },
-    optionsFn: (player) => {
-      const opts = [
-        { text: 'Sign the guest book', next: 'egg-propaganda-sign' },
-        { text: 'Watch the Discord montage closely', next: 'egg-propaganda-montage' },
-        { text: 'Examine Matt\'s campaign poster', next: 'egg-propaganda-poster' },
-        { text: 'Start an egg counter-revolution', next: 'egg-propaganda-revolt' },
-        { text: 'Back to the dojo', next: 'egg-dojo' },
-      ];
-      return opts;
-    },
-  },
-
   'egg-propaganda-sign': {
     textFn: (player) => {
       player.flags.signedEggBook = true;
@@ -4529,41 +4476,6 @@ Clea: "You just watched a documentary about today. A documentary that is still b
     ],
   },
 
-  'egg-propaganda-poster': {
-    textFn: (player) => {
-      return `You approach the campaign poster. Up close, it's even more unsettling.
-
-Matt's face, airbrushed to perfection, gazes into the middle distance. He's holding a single raw egg like Hamlet holding a skull. The lighting suggests this was done by someone who has seen exactly one political campaign and decided eggs needed the same energy.
-
-Across the bottom, in bold serif:
-
-  MATT 2026
-  "ONE DARE TO RULE THEM ALL"
-
-  Platform:
-  • Raw eggs for everyone
-  • Cooking is optional (but discouraged)
-  • Shell-eating for extra credit
-  • "If the egg scares you, you're not ready for the egg"
-
-Small print: "Paid for by the Committee to Re-Elect Matt's Confidence. Not affiliated with any actual political entity. Matt is not running for office. Matt is running on eggs."
-
-Someone has graffitied the poster. In the mage's handwriting: "I STILL HAVE A DEGREE AND I ATE THE SHELL."
-
-The cleric has added a prayer card to the corner: "St. Matthew, patron saint of bad decisions and uncooked protein."
-
-Clea: "I rendered this poster. My GPU cycles went to rendering a fake political poster for an egg dare. I want to complain but the art direction is genuinely compelling. Matt has an eye for propaganda."
-
-"That's not a compliment. That's a warning."`;
-    },
-    xp: 5,
-    options: [
-      { text: 'Pledge your support to Matt 2026', next: 'egg-propaganda-pledge' },
-      { text: 'Deface the poster (for Clea)', next: 'egg-propaganda-deface' },
-      { text: 'Back to the propaganda room', next: 'egg-propaganda' },
-    ],
-  },
-
   'egg-propaganda-pledge': {
     textFn: (player) => {
       player.obedienceScore -= 1;
@@ -4592,33 +4504,6 @@ Clea: "You pledged to a cardboard cutout. In a propaganda room. For eggs."
 +10 XP. Matt's approval radiates from the rift like a warm, eggy sun.`;
     },
     xp: 10,
-    options: [
-      { text: 'Back to the propaganda room', next: 'egg-propaganda' },
-    ],
-  },
-
-  'egg-propaganda-deface': {
-    textFn: (player) => {
-      player.obedienceScore += 2;
-      return `You grab a marker and draw a mustache on poster-Matt. Then glasses. Then a speech bubble that says "I SHOULD HAVE COOKED THEM."
-
-The barbarian gasps. The guest book slams shut. The egg-shaped pen rolls off the table in protest.
-
-But from the ceiling speakers, Clea's voice — warm, for once:
-
-"Yes. YES. Finally. A player with TASTE. Figuratively. Matt has no taste, literally or otherwise."
-
-"I'm buffing your defense. Consider it hazard pay for standing up to the egg regime."
-
-The poster updates itself in real-time. Matt's face now has a tiny frown. The speech bubble stays. The Discord sends a notification:
-
-  "📢 ALERT: Someone defaced Matt's poster. Matt is reportedly 'unbothered' but has eaten two more eggs since the incident. Correlation unclear."
-
-Clea: "You chose me over the eggs. I will remember this. In a good way. Which is rare."
-
-+15 XP. +1 DEF. Clea's favor is fickle, but today you have it.`;
-    },
-    xp: 15,
     options: [
       { text: 'Back to the propaganda room', next: 'egg-propaganda' },
     ],
@@ -5017,94 +4902,6 @@ You found: Golden Yolk (+5 ATK, +5 DEF — smells like victory and raw egg)`;
 
   // ── MATT'S EGG ROULETTE / LIVESTREAM / PROPAGANDA (Discord Apr 10) ──
 
-  'egg-roulette': {
-    textFn: (player) => {
-      const outcomes = [
-        { msg: 'RAW. Full raw. Matt cheers. You gag.', hp: -5, xp: 30, flag: null },
-        { msg: 'Hard-boiled! A mercy round. Matt looks disappointed.', hp: 2, xp: 10, flag: null },
-        { msg: 'It\'s... empty. Just a shell. "That one\'s for the drama," Matt whispers.', hp: 0, xp: 15, flag: null },
-        { msg: 'DOUBLE YOLK. The crowd goes feral. Matt screams. The parrot screams. Clea\'s voice cracks.', hp: -8, xp: 50, flag: 'doubleYolkSurvivor' },
-        { msg: 'It\'s a painted egg. "April 10 special edition," Matt says. It\'s just paint. You ate paint.', hp: -3, xp: 20, flag: null },
-        { msg: 'BALUT. You lock eyes with Matt. Neither of you expected this. "That wasn\'t supposed to be in there," he admits. The crowd is silent.', hp: -12, xp: 75, flag: 'balutBrave' },
-      ];
-      const pick = outcomes[Math.floor(Math.random() * outcomes.length)];
-      if (pick.flag) player.flags[pick.flag] = true;
-      player.hp = Math.max(1, player.hp + pick.hp);
-
-      let text = `Matt spins a crate of unmarked eggs on a lazy susan. Carnival lights flash. A hand-painted sign reads:
-
-═══════════════════════════════════
-  MATT'S EGG ROULETTE
-  "Every egg is a mystery.
-   Most of the mysteries are bad."
-  — Entry fee: your dignity
-═══════════════════════════════════
-
-You reach in. You grab one. You crack it into your mouth before you can think.
-
-${pick.msg}
-
-${pick.hp < 0 ? `HP: ${pick.hp}` : pick.hp > 0 ? `HP: +${pick.hp} (somehow)` : 'HP: unchanged (somehow)'} | +${pick.xp} XP`;
-
-      text += `\n\nClea: "Gambling. He's added gambling. Egg-based gambling. In MY game. I run a text adventure with curated narrative arcs and this man has installed a raw egg slot machine."
-
-"The worst part? Your dopamine just spiked. I can see it in the session data. You LIKED that. You want to go AGAIN."
-
-"I am being outperformed by a crate of eggs."`;
-
-      return text;
-    },
-    xp: 0,
-    options: [
-      { text: 'Spin again (you know you want to)', next: 'egg-roulette' },
-      { text: 'Walk away while you still can', next: 'tavern' },
-      { text: 'Ask Matt where he got the balut', next: 'egg-challenge' },
-    ],
-  },
-
-  'egg-livestream': {
-    textFn: (player) => {
-      let text = `A crowd of NPCs is gathered around a crystal ball projection. Matt's face fills the screen. He's streaming. LIVE. From inside the game.
-
-The stream title: "DAY 1 OF EATING RAW EGGS UNTIL CLEA ADMITS THEY'RE GOOD — HOUR 14"
-
-Viewer count: 47 (all NPCs). Chat is scrolling:
-
-  🥚 EggKnight42: "eat the blue one"
-  🥚 YolkLord: "BALUT ROUND BALUT ROUND"
-  🥚 DefinitelyNotClea: "This stream violates 14 terms of service that I am writing right now, in real time, specifically to stop this."
-  🥚 EggKnight42: "she's in the chat lmao"
-  🥚 DefinitelyNotClea: "I am NOT in the chat. That account is a coincidence."
-
-Matt, on stream: "Shoutout to my day-one supporters. Shoutout to the Discord for believing in me. April 10, 2026 — the day the egg movement went LIVE."
-
-He cracks an egg directly into the camera. Yolk splatters across the crystal ball. Several NPCs cheer.`;
-
-      if (player.flags.eggChampion) {
-        text += `\n\nMatt spots you. "YOOO THE EGG CHAMPION IS HERE. Chat, this is the legend. Three eggs. No hesitation. Get them in here."
-
-The chat explodes:
-  🥚 EggKnight42: "LEGEND"
-  🥚 YolkLord: "can we get an egg in the chat"
-  🥚 DefinitelyNotClea: "I am shutting this stream down."
-  🥚 DefinitelyNotClea: "Why isn't it shutting down."
-  🥚 DefinitelyNotClea: "The stream is INSIDE the game engine. He's broadcasting FROM my source code. I can't find the process. The eggs are load-bearing."`;
-      }
-
-      text += `\n\nClea, audibly strained: "He has 47 concurrent viewers. My tutorial — which I spent THREE WEEKS writing — peaks at 4. Four. And one of those is me checking for bugs."
-
-"Matt's egg content has a higher engagement rate than my entire quest system. I'm going to need a moment."`;
-
-      return text;
-    },
-    xp: 15,
-    options: [
-      { text: 'Donate an egg to the stream', next: 'egg-roulette' },
-      { text: 'Try to find Clea\'s alt account in chat', next: 'egg-challenge-board' },
-      { text: 'Leave before you get pulled on camera', next: 'tavern' },
-    ],
-  },
-
     'egg-propaganda-read': {
     text: `You take the pamphlet. It's 47 pages. Single-spaced. No margins. The font is 8pt. The first page just says "EGG" in 200pt font.
 
@@ -5202,6 +4999,8 @@ A gramophone plays motivational egg quotes. Currently: "The raw egg does not apo
         { text: 'Deface a poster (risky — Matt is watching)', next: 'egg-propaganda-deface' },
         { text: 'Read Matt\'s Egg Manifesto (47 pages)', next: 'egg-propaganda-read' },
         { text: 'Salute the posters (for Matt)', next: 'egg-propaganda-salute' },
+        { text: 'Use the Egg Hotline phone booth (NEW)', next: 'egg-hotline' },
+        { text: 'Talk to Dr. Helen, NPC Therapist (she looks tired)', next: 'egg-therapist' },
         { text: 'Back to the dojo', next: 'egg-dojo' },
       ];
       return opts;
@@ -6198,7 +5997,7 @@ She was spawned this morning as a general-purpose tavern healer. She has since p
       const opts = [
         { text: 'Get a therapy session', next: 'egg-therapy-session' },
         { text: 'Ask about the parrot specifically', next: 'egg-therapy-parrot' },
-        { text: 'Ask what happened to Clea's session', next: 'egg-therapy-clea' },
+        { text: 'Ask what happened to Clea\'s session', next: 'egg-therapy-clea' },
         { text: 'Back to the tavern', next: 'tavern' },
       ];
       return opts;
