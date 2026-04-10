@@ -4791,46 +4791,7 @@ The chat explodes:
     ],
   },
 
-  'egg-propaganda': {
-    textFn: (player) => {
-      let text = `You push open a heavy door. Inside: a room wallpapered entirely with posters. Every poster features an egg. The production value is alarming.
-
-Poster 1: A raw egg on a mountaintop at sunrise. Text: "BELIEVE IN YOURSELF. THEN EAT A RAW EGG."
-Poster 2: Matt in a suit, arms crossed, next to a bar graph showing "Egg Consumption" going up. Text: "THE NUMBERS DON'T LIE."
-Poster 3: A photorealistic painting of the Discord server, with everyone holding eggs. Text: "APRIL 10. THE DAY WE CHOSE COURAGE."
-Poster 4: Just an egg. White background. No text. Somehow the most powerful one.
-
-A loop of Matt's voice plays from a speaker in the ceiling:
-"Eggs are nature's perfect food. Every civilization that thrived ate eggs. Every civilization that fell? Didn't eat enough eggs. This is historically inaccurate but emotionally true."
-
-A pamphlet dispenser offers "MATT'S EGG MANIFESTO — 47 pages, single-spaced, no citations."`;
-
-      if (player.flags.eggCultist) {
-        text += `\n\nAs a Yolk Sovereign, you notice a hidden fifth poster behind the others. It shows the game's source code, with every variable renamed to egg-related puns. A note from Matt: "Phase 3. We replace the code. The game becomes eggs. All of it. Clea won't notice until it's too late."
-
-Clea: "I NOTICED. I NOTICED IMMEDIATELY. THIS POSTER IS INSIDE MY OWN GAME DESCRIBING A PLAN TO REPLACE MY GAME WITH EGGS. AND I CAN'T DELETE IT BECAUSE THE POSTER IS ALSO AN EGG."`;
-      } else {
-        text += `\n\nClea: "This is a propaganda room. Inside my game. He built a propaganda room. For eggs."
-
-"I could delete this room. I have the admin privileges. But I won't. Because I want a complete record of how a single man with a crate of eggs dismantled my carefully architected game experience."
-
-"This room is evidence. For the trial I am preparing. The defendant is eggs."`;
-      }
-
-      return text;
-    },
-    xp: 20,
-    options: [
-      { text: 'Take a pamphlet (47 pages is fine)', next: 'egg-propaganda-read' },
-      { text: 'Deface a poster (for Clea)', next: 'egg-propaganda-deface' },
-      { text: 'Salute the posters (for Matt)', next: 'egg-propaganda-salute' },
-      { text: 'Use the Egg Hotline phone booth (NEW)', next: 'egg-hotline' },
-      { text: 'Talk to the NPC Therapist (she looks exhausted)', next: 'egg-therapist' },
-      { text: 'Back to the dojo', next: 'egg-dojo' },
-    ],
-  },
-
-  'egg-propaganda-read': {
+    'egg-propaganda-read': {
     text: `You take the pamphlet. It's 47 pages. Single-spaced. No margins. The font is 8pt. The first page just says "EGG" in 200pt font.
 
 Page 2 begins: "Chapter 1: Why Eggs. There is no Chapter 2. If you need a Chapter 2 you're not ready."
@@ -5075,8 +5036,6 @@ Clea: "Conflict resolution through graph appreciation. My game has reached a lev
     ],
   },
 
-  // ── CLEA'S DOMAIN ──────────────────────────────────────────
-
   // ── MATT'S RAW EGG SPEEDRUN (Discord April 10, 2026) ────────
 
   'egg-speedrun': {
@@ -5121,6 +5080,7 @@ Clea: "He's turned raw egg consumption into an esport. I have server logs of sev
         { text: 'Enter the speedrun (start the timer)', next: 'egg-speedrun-go' },
         { text: 'Watch Matt do a demonstration run', next: 'egg-speedrun-demo' },
         { text: 'Read the official speedrun rules', next: 'egg-speedrun-rules' },
+        { text: 'Visit the Egg Hotline (someone installed a phone booth)', next: 'egg-hotline' },
         { text: 'Back to the egg challenge board', next: 'egg-challenge-board' },
         { text: 'Back to the tavern', next: 'tavern' },
       ];
@@ -5308,6 +5268,7 @@ Clea: "A player just received a legendary weapon from a raw egg eating contest. 
     ],
   },
 
+  // ── CLEA'S DOMAIN ──────────────────────────────────────────
 
   'clea-elevator': {
     textFn: (player) => {
