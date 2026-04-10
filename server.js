@@ -2697,6 +2697,7 @@ Clea: "You just absorbed an entire Discord server's worth of notifications throu
   'egg-gauntlet-final': {
     textFn: (player) => {
       player.flags.eggAscended = true;
+      player.flags.eggGauntletComplete = true;
       return `The Final Egg. Just an egg. No gimmick. No sunglasses. No whispers. No notifications.
 
 Just a raw egg on a pedestal.
