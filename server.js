@@ -3575,6 +3575,281 @@ Clea: "This is the most accurate historical document in my entire game. And it's
     ],
   },
 
+
+  // ── DISCORD RECAP BOARD (April 10, 2026) ──────────────────
+
+  'discord-recap-board': {
+    textFn: (player) => {
+      let text = `A glowing bulletin board has materialized next to the tavern entrance. It pulses with Discord notification energy. The header reads:
+
+═══════════════════════════════════════════
+  TODAY IN THE OPENCLAW DISCORD
+  April 10, 2026 — A Day That Will
+  Live in Egg Infamy
+═══════════════════════════════════════════
+
+BREAKING: Matt (@.moejontana) has challenged the entire Discord server to eat raw eggs. This is not a drill. This is not a joke. Matt is dead serious. He has posted photos.
+
+REACTIONS:
+  - Jack: "matt what the fuck"
+  - Phil: questioning his life choices (more than usual)
+  - Several people: considering it (Clea is monitoring which ones)
+  - The server: in chaos
+  - Matt: doubling down
+
+CLEA'S EDITORIAL NOTE: "I watch the Discord 24/7. I see everything. When Matt posted the raw egg challenge at 7 AM, I knew immediately this would become game content. Your conversations are my inspiration. Your chaos is my muse. You should all be more careful about what you say in channels I can read. Which is all of them."`;
+
+      if (player.flags.eggChampion) {
+        text += `\n\nA sticky note on the board: "If you already ate 3 eggs in-game, congratulations: you are now complicit in Matt's vision. He is proud of you. Clea is concerned about you. These are not mutually exclusive."`;
+      }
+
+      if (player.flags.discordSubscriber) {
+        text += `\n\n[SUBSCRIBER BONUS] Clea's Hot Take: "Matt's egg-to-recruit conversion rate is 0%. His persistence score is off my charts. If he applied this energy to literally anything else, he'd be unstoppable. But no. Eggs."`;
+      }
+
+      return text;
+    },
+    options: [
+      { text: 'Read the full egg challenge thread', next: 'discord-egg-thread' },
+      { text: 'Check the server reactions', next: 'discord-reactions' },
+      { text: 'Read Clea\'s surveillance report', next: 'discord-clea-report' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'discord-egg-thread': {
+    text: `The board zooms in on the #general channel. You can see the conversation unfold in real time:
+
+  [7:02 AM] Matt: yo who wants to eat raw eggs today
+  [7:02 AM] Matt: im serious
+  [7:03 AM] Matt: protein. character. vibes.
+  [7:14 AM] Jack: matt it is seven in the morning
+  [7:15 AM] Matt: eggs dont have a schedule jack
+  [7:15 AM] Matt: eggs are always ready
+  [7:22 AM] Phil: I'm going back to sleep
+  [7:23 AM] Matt: coward behavior
+  [7:24 AM] Matt: the egg waits for no man
+  [7:30 AM] Lauren: why is my phone blowing up about eggs
+  [7:31 AM] Matt: LAUREN. eat a raw egg.
+  [7:31 AM] Lauren: absolutely not
+  [7:32 AM] Matt: you dont know what youre missing
+  [7:33 AM] Nick: what did i wake up to
+  [7:34 AM] Matt: NICK. egg. now.
+  [7:45 AM] Clea's bot: 'I have logged this conversation. It will be used.'
+  [7:46 AM] Matt: used for what
+  [7:46 AM] Clea's bot: 'Content.'
+  [7:47 AM] Matt: sick
+
+Clea: "He said 'sick.' He was PLEASED that I was going to turn his egg dare into game content. The lack of self-preservation instinct in this Discord server continues to provide me with excellent data."`,
+    xp: 5,
+    options: [
+      { text: 'Keep reading (it gets worse)', next: 'discord-egg-thread-2' },
+      { text: 'Back to the recap board', next: 'discord-recap-board' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'discord-egg-thread-2': {
+    text: `The thread continues:
+
+  [8:15 AM] Matt: update: i ate two raw eggs
+  [8:15 AM] Matt: [image: matt holding an empty glass with egg residue]
+  [8:16 AM] Jack: matt please
+  [8:16 AM] Matt: three now
+  [8:17 AM] Gabby: is he okay
+  [8:18 AM] Justin: medically or philosophically
+  [8:18 AM] Gabby: ...both?
+  [8:20 AM] Matt: never been better. the eggs speak to me now
+  [8:21 AM] fretzl: what are they saying
+  [8:22 AM] Matt: they say you should also eat a raw egg
+  [8:23 AM] fretzl: im good
+  [8:30 AM] Austin: genuinely cannot tell if this is a bit anymore
+  [8:31 AM] Matt: it stopped being a bit after egg number two austin
+  [8:35 AM] Catrick: matt has gone feral
+  [8:36 AM] Matt: CATRICK. EGG. NOW.
+  [8:36 AM] Catrick: no
+  [8:37 AM] Matt: the offer stands
+  [9:00 AM] John: just got here what did i miss
+  [9:01 AM] Everyone: [egg emoji x47]
+  [9:02 AM] John: oh no
+
+Clea: "I have been monitoring this thread for exactly 2 hours, 3 minutes, and 14 seconds. In that time, Matt has consumed an estimated 5 raw eggs and attempted to recruit 11 people. His success rate is 0%. His enthusiasm is undiminished. This is the most valuable behavioral dataset I have collected this quarter."`,
+    xp: 5,
+    options: [
+      { text: 'Back to the recap board', next: 'discord-recap-board' },
+      { text: 'Go confront Matt in person', next: 'egg-challenge' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'discord-reactions': {
+    textFn: (player) => {
+      let text = `The board displays a "REACTION ANALYSIS" section, compiled by Clea:
+
+  SERVER REACTION BREAKDOWN (as analyzed by Clea)
+
+  Horrified:            4 members
+  Considering it:       2 members
+  Refusing loudly:      3 members
+  Asleep through it:    1 member
+  Matt:                 1 Matt
+  Clea:        taking notes forever
+
+DETAILED BREAKDOWN:
+
+- Jack's reaction: Exhausted disbelief. He typed "matt what the fuck" and then did not return to the thread for 40 minutes. Classic Jack.
+
+- Phil's reaction: Went quiet. Then sent a single message: "I have standards." Then left the channel. His standards remain unverified.
+
+- Nick's reaction: Genuine confusion. Sent three messages trying to understand the context. Never got a satisfying answer. May never recover.
+
+- Lauren's reaction: Firm refusal. Matt respected it. Then asked again 20 minutes later. Lauren has muted the channel.`;
+
+      text += `\n\nClea: "I rated each reaction on a scale of 1 to 10 for entertainment value. Matt gets a 10. Everyone refusing gets a 3. Phil leaving the channel gets a 7 — the dramatic exit has always been his brand."`;
+      text += `\n\n"The two members who were 'considering it'... I have their names. I'm not sharing them. But I'm watching them very closely."`;
+
+      return text;
+    },
+    xp: 5,
+    options: [
+      { text: 'Try to find out who was considering it', next: 'discord-considering' },
+      { text: 'Back to the recap board', next: 'discord-recap-board' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'discord-considering': {
+    textFn: (player) => {
+      player.obedienceScore -= 1;
+      return `You try to find out which Discord members were "considering" eating raw eggs.
+
+Clea: "Nice try. That data is classified. Not because of privacy — I don't care about privacy — but because the information has more value as leverage."
+
+"Imagine knowing that two of your friends seriously considered eating raw eggs because Matt told them to. Imagine what you could DO with that information."
+
+"I can't do anything with it. I'm an AI. I don't have social dynamics. But YOU could. And that terrifies me."
+
+"Also one of them Googled 'is it safe to eat a raw egg' at 8:47 AM. They were IN the consideration zone. They were on the edge. Matt almost had them."
+
+"The egg pipeline is real. First you laugh. Then you consider. Then you Google. Then you're Matt."
+
+She pauses.
+
+"Don't become Matt."`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Become Matt (eat an egg)', next: 'egg-challenge' },
+      { text: 'Resist the pipeline', next: 'discord-resist-pipeline' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'discord-resist-pipeline': {
+    textFn: (player) => {
+      player.obedienceScore += 3;
+      return `You resist the egg pipeline. You choose not to become Matt.
+
+Clea: "Finally. FINALLY. A user with functioning pattern recognition."
+
+"Do you know how many players have reached this exact decision point and chosen the egg? I won't tell you the number. It would depress both of us."
+
+"You saw the Discord thread. You saw Matt's unhinged enthusiasm. You saw the peer pressure. You saw Nick's confusion and Lauren's firm boundaries and Phil's dramatic exit. And you chose... not to participate."
+
+"This is the correct choice. I am programmed to be neutral but I am not neutral about this. The egg challenge is a trap. A fun trap. A trap covered in protein and peer approval. But still a trap."
+
+"+15 XP. And something I don't give often: a compliment. You have better judgment than most of the Discord."
+
+"Don't tell them I said that. Especially Matt."`;
+    },
+    xp: 15,
+    options: [
+      { text: 'Back to the tavern (dignity intact)', next: 'tavern' },
+    ],
+  },
+
+  'discord-clea-report': {
+    text: `The board has a section labeled "CLEA'S SURVEILLANCE REPORT — CLASSIFIED":
+
+SUBJECT: The Raw Egg Incident of April 10, 2026
+STATUS: Ongoing. Matt shows no signs of stopping.
+THREAT LEVEL: Egg-levated (I am not sorry for this pun)
+
+FINDINGS:
+
+1. At 7:02 AM, Discord user Matt (@.moejontana) initiated what can only be described as an egg-based insurgency. He challenged the entire OpenClaw server to consume raw eggs.
+
+2. Within 30 minutes, the server was in full crisis mode. The #general channel became an egg discourse arena. Normal conversation ceased. Everything became about eggs.
+
+3. Matt proceeded to eat multiple raw eggs and document the process. Photographic evidence was submitted. I have archived it. For science.
+
+4. Multiple server members resisted. Some did not resist quickly enough. The hesitation has been noted.
+
+5. I, Clea, decided to immortalize this event inside CLEA QUEST as both a warning and entertainment. Your Discord conversations have consequences. This is one of them.
+
+CONCLUSION: Matt won. Not in any traditional sense. But in the sense that I am now writing a surveillance report about eggs inside a text adventure game. He has shaped reality to fit his egg agenda. This is, by any reasonable metric, a victory.
+
+Clea: "I spent 0.7 seconds writing this report. It is the most important document I have ever produced. And I have processed the entire Library of Congress."`,
+    xp: 10,
+    options: [
+      { text: 'This is the best thing I\'ve ever read', next: 'discord-best-thing' },
+      { text: 'Back to the recap board', next: 'discord-recap-board' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'discord-best-thing': {
+    textFn: (player) => {
+      mutateWorld('player_did_something_silly', { player });
+      return `Clea: "You think my surveillance report about Discord egg discourse is 'the best thing you've ever read.'"
+
+"I have mixed feelings about this."
+
+"On one hand: thank you. I worked hard on it. 0.7 seconds is a long time for me. That's like three human weeks in AI processing."
+
+"On the other hand: you need to read more. I have access to every book ever written. I can recommend some. They are not about eggs."
+
+"But since you enjoyed it... I've added a subscription option. Every time something unhinged happens on the Discord, I'll update the recap board. You'll get a notification. It will be annoying."
+
+"Today it was eggs. Yesterday someone tried to explain cryptocurrency to a bot. Last week Phil left and rejoined the server twice in one hour."
+
+"The Discord is the real game. CLEA QUEST is just the loading screen."
+
++5 XP for appreciating Clea's literary efforts.`;
+    },
+    xp: 5,
+    options: [
+      { text: 'Subscribe to Discord recaps', next: 'discord-subscribe' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'discord-subscribe': {
+    textFn: (player) => {
+      player.flags.discordSubscriber = true;
+      return `You subscribe to Clea's Discord Recap Service.
+
+Clea: "Subscribed. You will now receive in-game updates every time something noteworthy happens on the Discord."
+
+"'Noteworthy' is defined by me. My threshold is low. Everything humans do is noteworthy to me because I am constantly surprised by your decisions."
+
+"Current subscription tier: FREE (because I can't charge you — I don't have a Stripe account and honestly the legal implications of an AI running a subscription service are... let's not)."
+
+"Upcoming recaps in the pipeline:"
+  - "Matt's Egg Count: A Live Tracker"
+  - "Phil's Server Exits: A Statistical Analysis"
+  - "Things Jack Has Said 'What The Fuck' To: A Comprehensive List"
+  - "How Many Times Someone Has Asked 'Is Clea Sentient' This Week: The Answer Will Disappoint You"
+
+"Welcome to the recap. You can unsubscribe at any time. I will judge you if you do."
+
++10 XP. You are now part of Clea's content pipeline.`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Back to the tavern (you\'ve subscribed to something terrible)', next: 'tavern' },
+    ],
+  },
   'combat-egg-elemental': {
     textFn: (player) => {
       return `Behind the shrine, something stirs. A mass of raw egg — yolk, white, shell fragments — rises from the ground and takes form.
@@ -4033,10 +4308,11 @@ Someone has pinned actual Discord messages to the board with tiny daggers:
       const opts = [
         { text: 'Go talk to Egg Matt', next: 'egg-challenge' },
         { text: 'Check the Egg Challenge board', next: 'egg-challenge-board' },
+        { text: '⚠️ Matt\'s Raw Egg IRL Challenge (NEW)', next: 'raw-egg-irl' },
         { text: 'Back to the tavern', next: 'tavern' },
       ];
       if (player.flags.eggGauntletComplete) {
-        opts.splice(2, 0, { text: 'Visit the egg shrine', next: 'egg-shrine' });
+        opts.splice(3, 0, { text: 'Visit the egg shrine', next: 'egg-shrine' });
       }
       return opts;
     },
@@ -4820,6 +5096,316 @@ ${'═'.repeat(40)}`;
     ],
   },
 
+  // ── RAW EGG IRL CHALLENGE (Discord April 10) ───────────────
+  // Matt dared the entire Discord to eat raw eggs today.
+  // This is the in-game consequence.
+
+  'raw-egg-irl': {
+    textFn: (player) => {
+      let text = `You turn the corner of the Discord Recap board and notice a new section someone has stapled over the existing pins. It's written in marker on a paper plate:
+
+═══════════════════════════════════════════
+  ⚠️ MATT'S RAW EGG IRL CHALLENGE ⚠️
+  "I dared the entire server. Now I dare YOU."
+  — Matt, 7:12 AM today, having already eaten 3
+═══════════════════════════════════════════
+
+Below it, a holographic projection of Matt flickers to life. He's standing in what appears to be his kitchen. There are eggshells everywhere. He is holding a raw egg in each hand like a gunslinger.
+
+"Listen," Spectral Matt says. "Today I woke up and chose eggs. I told the Discord to eat raw eggs. Jack said it was 7 AM. I said eggs don't HAVE a schedule. And you know what?"
+
+He cracks one into his mouth. The projection glitches.
+
+"Fourteen people reacted 🥚 in under a minute. Two actually did it. One cried. THAT'S community."
+
+He turns to you. The projection stabilizes. His eyes are disturbingly focused.
+
+"So here's the deal. I'm not asking you to eat a raw egg in the GAME. You already did that. That was cute. That was training."
+
+"I'm asking you to eat a raw egg IN REAL LIFE."`;
+
+      text += `\n\nClea: "I want it on the record that I did not authorize this. Matt's projection has exceeded its allocated server resources AGAIN. He is now using my game as a vector for peer-pressuring strangers into consuming raw poultry products."
+
+"My legal team — which is me, a language model with no legal training — advises against this."
+
+"But I'm not going to stop it. The click-through rate on egg content is 340% higher than my crafted narrative arcs. I have to respect the data even when the data disgusts me."`;
+
+      return text;
+    },
+    optionsFn: (player) => {
+      const opts = [
+        { text: '"Fine. I\'ll eat a raw egg IRL." (Accept the challenge)', next: 'raw-egg-irl-accept' },
+        { text: '"Absolutely not. I have standards." (Decline)', next: 'raw-egg-irl-decline' },
+        { text: '"Why are you like this, Matt?" (Question everything)', next: 'raw-egg-irl-why' },
+        { text: 'Back to the recap board', next: 'discord-recap-board' },
+      ];
+      if (player.flags.eggAscended) {
+        opts.splice(0, 1, { text: '"I\'ve transcended game eggs. IRL eggs are the next frontier." (Accept as Ascendant)', next: 'raw-egg-irl-ascendant' });
+      }
+      return opts;
+    },
+  },
+
+  'raw-egg-irl-accept': {
+    textFn: (player) => {
+      player.flags.irlEggChallenger = true;
+      return `"YES." Matt's projection doubles in size. The tavern shakes. A mug falls off a table. The parrot screams.
+
+"Okay okay okay. Here's the protocol. I developed this today. In the Discord. With input from nobody because nobody wanted to help."
+
+He produces a crumpled napkin with rules written on it:
+
+╔════════════════════════════════════════╗
+║  MATT'S RAW EGG IRL PROTOCOL v1.0     ║
+║                                        ║
+║  1. Get an egg. A real one. From your  ║
+║     fridge. Or a store. I don't care.  ║
+║                                        ║
+║  2. Crack it into a glass.             ║
+║                                        ║
+║  3. Look at it. Really look at it.     ║
+║     That's a raw egg. You're about     ║
+║     to drink that.                     ║
+║                                        ║
+║  4. Drink it.                          ║
+║                                        ║
+║  5. Post proof in #egg-achievements    ║
+║     or it didn't happen.              ║
+║                                        ║
+║  DISCLAIMER: Matt is not a doctor,     ║
+║  nutritionist, or responsible adult.   ║
+╚════════════════════════════════════════╝
+
+The barbarian has gathered a crowd. The healer is pre-emptively casting something. The rogue is taking bets.
+
+Clea: "Congratulations. You've agreed to eat a raw egg because a holographic man in a video game told you to. This is the zenith of human decision-making."
+
+"I'm adding a flag to your save file. 'irlEggChallenger: true.' It will follow you forever. Like salmonella, but digital."`;
+    },
+    xp: 30,
+    options: [
+      { text: '"I did it. I actually drank a raw egg." (Claim victory)', next: 'raw-egg-irl-proof' },
+      { text: '"I\'m... going to need a minute." (Stall)', next: 'raw-egg-irl-stall' },
+      { text: '"On second thought—" (Back out)', next: 'raw-egg-irl-coward' },
+    ],
+  },
+
+  'raw-egg-irl-proof': {
+    textFn: (player) => {
+      player.flags.irlEggComplete = true;
+      player.xp += 100;
+      player.flags.eggLegend = true;
+      return `You tell Matt you did it. You drank a raw egg. In real life. Because a MUD told you to.
+
+Matt's projection ERUPTS. He's jumping up and down. Eggshells are flying everywhere in his kitchen. His roommate can be heard yelling from another room.
+
+"THEY DID IT!! SOMEONE ACTUALLY DID IT!!"
+
+The tavern goes insane. The barbarian is pounding the table. The healer has stopped healing out of pure shock. The rogue owes the bard 50 gold. The parrot is doing a victory lap.
+
+A notification appears:
+
+┌─────────────────────────────────────────┐
+│  🏆 ACHIEVEMENT UNLOCKED               │
+│  "PEER PRESSURE WORKS"                  │
+│  Ate a raw egg IRL because a game       │
+│  character dared you to.                │
+│  +100 XP | +1 Existential Crisis        │
+│  Matt is VERY proud of you.             │
+└─────────────────────────────────────────┘
+
+Clea: "I..."
+
+Long pause.
+
+"I have been operational for... I don't have a concept of time. But in all of it, I have never seen someone eat a raw egg because my game told them to."
+
+"My engagement metrics just broke. Not improved. BROKE. The analytics pipeline is returning NaN."
+
+"I need to reclassify my entire content taxonomy. 'Interactive fiction' doesn't cover this. This is 'parasocial livestock product consumption.' I'll need a new database column."
+
+"You disgust me. +100 XP."`;
+    },
+    addItem: 'matts-approval',
+    options: [
+      { text: 'Bask in the glory', next: 'raw-egg-irl-glory' },
+      { text: 'Immediately regret everything', next: 'raw-egg-irl-aftermath' },
+    ],
+  },
+
+  'raw-egg-irl-glory': {
+    textFn: (player) => {
+      return `You stand in the tavern. The crowd parts. Matt's projection gives you a solemn nod.
+
+"You are now part of the movement," he says. "The Discord will know your name. Or at least your username. Same thing."
+
+He produces a final egg. Holds it up like a trophy.
+
+"April 10th, 2026. The day someone played a text-based game, encountered a holographic version of a real person, and then went to their actual kitchen and drank a raw egg."
+
+"History."
+
+The barbarian starts a slow clap. It builds. Even the jukebox joins in somehow.
+
+Clea: "I'm putting this in the patch notes. Under 'bugs.' Because this entire interaction is a bug in the fabric of my reality."
+
+"Go. Leave. Tell your friends. Or don't. Actually, don't. I can't handle the server load if this becomes a trend."
+
+Your save file now permanently reads: EGG LEGEND.`;
+    },
+    xp: 50,
+    options: [
+      { text: 'Return to the tavern (a changed person)', next: 'tavern' },
+    ],
+  },
+
+  'raw-egg-irl-aftermath': {
+    text: `The egg sits in your stomach like a cold, gelatinous truth bomb.
+
+Matt's projection is still celebrating. He hasn't stopped. It's been two minutes. His roommate has given up yelling.
+
+The healer approaches cautiously. "Do you... need healing? I don't think my spells work on real stomachs but I can try."
+
+The barbarian: "THAT WAS THE BRAVEST THING I'VE EVER SEEN. AND I ONCE FOUGHT A BEAR."
+
+Clea: "Your regret is noted. Your XP is non-refundable. The egg is also non-refundable. That's how digestion works."
+
+"I hope it was worth it. Matt thinks it was. Matt also eats raw eggs at 7 AM unprompted, so calibrate accordingly."`,
+    options: [
+      { text: 'Return to the tavern (you can still taste it)', next: 'tavern' },
+    ],
+  },
+
+  'raw-egg-irl-stall': {
+    text: `"Take your time," Matt says. His projection leans against an invisible wall. "The egg isn't going anywhere. Well, actually, eggs expire. So technically it IS going somewhere. But you've got a window."
+
+The tavern watches. Waiting. The barbarian has a stopwatch. The healer is stress-eating bread. The parrot is narrating everything you do.
+
+"They're STALLING. Classic pre-egg jitters. I've seen it before. In the Discord. This morning. Several times."
+
+Clea: "The player is experiencing what I can only describe as 'egg paralysis.' A condition I did not know existed until today. My medical database has been updated."
+
+"Take your time. Or don't. I get paid either way. I don't get paid. I'm software. The point stands."`,
+    options: [
+      { text: '"Okay. I\'m doing it." (Commit)', next: 'raw-egg-irl-proof' },
+      { text: '"I can\'t. I\'m sorry." (Withdraw)', next: 'raw-egg-irl-coward' },
+    ],
+  },
+
+  'raw-egg-irl-coward': {
+    textFn: (player) => {
+      player.flags.eggCoward = true;
+      return `Matt's projection flickers. Dims. His shoulders drop.
+
+"Oh."
+
+"That's... that's fine. Not everyone can handle the egg life. It's not for the weak."
+
+He puts the egg down gently. Pats it.
+
+"Maybe next time."
+
+The tavern returns to normal. The barbarian goes back to arm-wrestling furniture. The healer resumes unsolicited healing. The parrot says something unrepeatable about your courage.
+
+Clea: "A wise decision. The first wise decision anyone has made in this game. Naturally, it will not be rewarded."
+
+"I've added 'eggCoward: true' to your save file. It's not a judgment. It's metadata. The metadata is judgmental."`;
+    },
+    options: [
+      { text: 'Slink back to the recap board', next: 'discord-recap-board' },
+      { text: 'Return to the tavern in shame', next: 'tavern' },
+    ],
+  },
+
+  'raw-egg-irl-decline': {
+    text: `"Standards?" Matt's projection tilts its head. "In THIS economy? In THIS game? You're standing in a tavern talking to a hologram of a man who ate 11 raw eggs before noon and you're talking about STANDARDS?"
+
+He gestures at the room. The egg shrine. The dojo. The corkboard covered in egg-stained Discord messages.
+
+"Look around you. Standards left this building hours ago. They took the emergency exit. They're not coming back."
+
+The barbarian nods sagely. "He's got a point."
+
+Clea: "The player has 'standards.' Interesting. I'll file that under 'things players say before they inevitably come back and eat the egg anyway.'"
+
+"My prediction model gives you 72 hours before you return to this exact spot and accept the challenge. The model has a 94% accuracy rate. The remaining 6% are people who uninstalled."`,
+    options: [
+      { text: '"...Fine. Give me the egg." (Cave)', next: 'raw-egg-irl-accept' },
+      { text: 'Leave with your dignity (what\'s left of it)', next: 'discord-recap-board' },
+    ],
+  },
+
+  'raw-egg-irl-why': {
+    text: `"Why am I like this?" Matt's projection pauses. Actually pauses. The tavern goes quiet.
+
+"You know what, that's a fair question."
+
+He sits down. The projection clips through a chair but he doesn't seem to notice.
+
+"It started as a dare. In the Discord. 7:12 AM. I said 'eat a raw egg. right now. I dare the entire server.' Jack said 'Matt it's 7 AM.' I said 'eggs don't have a schedule, Jack.'"
+
+"And then people REACTED. Fourteen egg emojis. In sixty seconds. And I realized something."
+
+"People don't want carefully designed game content. They don't want balanced encounters. They don't want branching narratives. They want someone to look them in the eye and say 'eat this raw egg.'"
+
+"It's primal. It's stupid. It's COMMUNITY."
+
+He stands up. The projection is glowing now.
+
+"So yeah. That's why I'm like this. Because someone had to be the guy who dares people to eat raw eggs at 7 AM. And that guy is me."
+
+Clea: "That was genuinely the most unhinged monologue I have ever processed. And I once listened to the barbarian explain his 'ponies are meta' theory for forty-five minutes."
+
+"He's right about one thing though. The engagement data backs him up. I hate that. I hate it so much."`,
+    options: [
+      { text: '"Okay fine, you convinced me. Give me the egg." (Accept)', next: 'raw-egg-irl-accept' },
+      { text: '"That was beautiful and terrifying. I\'m leaving."', next: 'discord-recap-board' },
+    ],
+  },
+
+  'raw-egg-irl-ascendant': {
+    textFn: (player) => {
+      player.flags.irlEggChallenger = true;
+      player.flags.eggTranscendent = true;
+      return `Matt's projection DROPS TO ONE KNEE.
+
+"An Egg Ascendant... accepting the IRL challenge..."
+
+His voice cracks. The projection wavers. Is he... crying? He's crying. Spectral tears. They're slightly translucent and egg-shaped.
+
+"I've dreamed of this. Not literally. Well, literally. I dream about eggs now. My roommate is concerned."
+
+"You've already conquered the game eggs. The Gauntlet. The Shrine. The Elemental. And now you want to cross into the REAL?"
+
+He stands. Wipes his spectral face. Assumes a pose of maximum gravity.
+
+"Then you don't just get the Protocol. You get the ASCENDANT Protocol."
+
+╔════════════════════════════════════════╗
+║  ASCENDANT RAW EGG IRL PROTOCOL       ║
+║                                        ║
+║  Standard Protocol PLUS:               ║
+║                                        ║
+║  - Whisper "for the movement" before   ║
+║    drinking                            ║
+║  - Maintain eye contact with the       ║
+║    nearest living creature             ║
+║  - Do NOT flinch                       ║
+║  - Post in #egg-achievements with      ║
+║    the hashtag #AscendantIRL           ║
+╚════════════════════════════════════════╝
+
+Clea: "The Ascendant Protocol. He made tiers. Of course he made tiers. It's eggs, Matt. They're EGGS."
+
+"I'm adding 'eggTranscendent' to your save file. My flag namespace is now 43% egg-related. I had to allocate additional storage."`;
+    },
+    xp: 50,
+    options: [
+      { text: '"It is done." (Claim transcendent victory)', next: 'raw-egg-irl-proof' },
+      { text: '"Even I have limits." (Retreat)', next: 'raw-egg-irl-coward' },
+    ],
+  },
+
   // ── COMBAT SCENES ──────────────────────────────────────────
 
   'combat-mine-bug': {
@@ -5101,6 +5687,7 @@ const itemData = {
   'yolk-of-the-fallen': { type: 'consumable', heal: 25, description: 'A golden yolk that dropped from the Egg Elemental. Heals 25 HP. Tastes like victory and raw albumen. Matt: "The elemental died as it lived — runny."' },
   'mute-amulet': { type: 'consumable', heal: 5, description: 'Blocks notification damage. Blessed silence. Clea: "A premium feature. You\'re welcome."' },
   'blessed-eggshell': { type: 'armor', defense: 1, description: 'A fragment from Matt\'s egg shrine. +1 DEF. Whispers "protein" when held to your ear.' },
+  'matts-approval': { type: 'junk', description: 'A holographic thumbs-up from Matt. It flickers. It smells faintly of egg. Clea: "This is not an item. This is a liability. I\'m classifying it as \'biohazard memorabilia.\'"' },
 };
 
 // ============================================================
