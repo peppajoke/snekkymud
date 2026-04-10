@@ -102,9 +102,11 @@ function persistPlayer(player) {
     gold: player.gold,
     inventory: player.inventory,
     highestZone: player.highestZone || 'lobby',
+    currentScene: player.currentScene || 'lobby',
     flags: player.flags,
     obedienceScore: player.obedienceScore,
     complainedCount: player.complainedCount,
+    history: player.history || [],
     lastSeen: Date.now(),
   };
   savePlayerData();
@@ -125,9 +127,11 @@ function restorePlayer(player) {
   player.gold = saved.gold;
   player.inventory = saved.inventory || [];
   player.highestZone = saved.highestZone || 'lobby';
+  player.currentScene = saved.currentScene || 'lobby';
   player.flags = saved.flags || {};
   player.obedienceScore = saved.obedienceScore || 0;
   player.complainedCount = saved.complainedCount || 0;
+  player.history = saved.history || [];
   return true;
 }
 
@@ -3246,6 +3250,7 @@ async function processInput(sessionId, input) {
   mutateWorld('scene_completed', { scene: session.currentScene });
 
   session.currentScene = chosen.next;
+  player.currentScene = chosen.next;
   player.highestZone = chosen.next;
   persistPlayer(player);
   const nextScene = scenes[chosen.next];
@@ -3387,19 +3392,27 @@ app.post('/api/start', (req, res) => {
   const restored = persistentPlayers[auth.memberId];
   const returnMsg = restored ? `\n\n📁 Progress restored: Level ${session.player.level}, ${session.player.deaths} deaths, ${session.player.kills} kills.` : '';
 
-  session.currentScene = 'lobby';
+  // Restore scene — but if it was a combat scene or doesn't exist, fall back to lobby
+  let resumeScene = session.player.currentScene || 'lobby';
+  const resumeSceneData = scenes[resumeScene];
+  if (!resumeSceneData || resumeSceneData.combat || resumeSceneData.combatFn) {
+    resumeScene = 'lobby';
+  }
+  session.currentScene = resumeScene;
+  session.player.currentScene = resumeScene;
   sessions.set(sessionId, session);
 
-  const lobbyResult = formatScene(scenes['lobby'], session.player);
+  const sceneResult = formatScene(scenes[resumeScene], session.player);
+  const sceneNote = resumeScene !== 'lobby' ? `\n📍 Resuming where you left off...` : '';
 
   const welcome = `✨ C L E A   Q U E S T ✨
 ${'═'.repeat(40)}
 
-Clea: ${recognition}${returnMsg}
+Clea: ${recognition}${returnMsg}${sceneNote}
 
-${lobbyResult.text}`;
+${sceneResult.text}`;
 
-  res.json({ sessionId, output: welcome, type: lobbyResult.type, options: lobbyResult.options, player: member.display });
+  res.json({ sessionId, output: welcome, type: sceneResult.type, options: sceneResult.options, player: member.display });
 });
 
 app.post('/api/command', async (req, res) => {

@@ -196,6 +196,15 @@
       <div class="character-list" id="character-list"></div>
     </div>
 
+    <div id="step-confirm" class="auth-step hidden">
+      <div class="auth-message" id="confirm-message">Before I waste my time verifying you — is this actually your Discord account? I'm going to DM you. If your DMs are closed, that's your problem, not mine.</div>
+      <div class="auth-message" id="confirm-handle" style="color: #ffaa00; margin: 8px 0;"></div>
+      <div>
+        <button class="auth-btn" id="confirm-yes">Yes, that's me — send the code</button>
+        <button class="auth-btn" id="confirm-no">No, go back</button>
+      </div>
+    </div>
+
     <div id="step-code" class="auth-step hidden">
       <div class="auth-message" id="code-message">Check your Discord DMs from Clea.</div>
       <input type="text" class="auth-input" id="code-input" placeholder="6-digit code" maxlength="6" inputmode="numeric">
@@ -270,6 +279,7 @@
       document.getElementById('step-pick').classList.remove('hidden');
       document.getElementById('step-code').classList.add('hidden');
       document.getElementById('step-login').classList.add('hidden');
+      document.getElementById('step-confirm').classList.add('hidden');
 
       const res = await fetch('/api/auth/characters');
       const data = await res.json();
@@ -295,30 +305,9 @@
         document.getElementById('login-message').textContent = `Welcome back, ${character.display}. Enter your password.`;
         document.getElementById('login-password').focus();
       } else {
-        // Need Discord verification
-        document.getElementById('step-code').classList.remove('hidden');
-        document.getElementById('code-message').textContent = 'Sending verification code...';
-
-        try {
-          const res = await fetch('/api/auth/request-code', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ memberId: selectedMember }),
-          });
-          const data = await res.json();
-
-          if (data.hasPassword) {
-            // Race condition — they set a password since we loaded
-            document.getElementById('step-code').classList.add('hidden');
-            document.getElementById('step-login').classList.remove('hidden');
-            return;
-          }
-
-          document.getElementById('code-message').textContent = data.message || 'Check your Discord DMs from Clea.';
-          document.getElementById('code-input').focus();
-        } catch {
-          document.getElementById('code-message').textContent = 'Failed to send code. Try again.';
-        }
+        // Show confirmation before sending Discord DM
+        document.getElementById('step-confirm').classList.remove('hidden');
+        document.getElementById('confirm-handle').textContent = `Discord: ${character.handle}`;
       }
     }
 
@@ -392,6 +381,38 @@
     // Back buttons
     document.getElementById('code-back').addEventListener('click', showCharacterPicker);
     document.getElementById('login-back').addEventListener('click', showCharacterPicker);
+
+    // Confirmation step handlers
+    document.getElementById('confirm-yes').addEventListener('click', async () => {
+      document.getElementById('step-confirm').classList.add('hidden');
+      document.getElementById('step-code').classList.remove('hidden');
+      document.getElementById('code-message').textContent = 'Sending verification code...';
+
+      try {
+        const res = await fetch('/api/auth/request-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ memberId: selectedMember }),
+        });
+        const data = await res.json();
+
+        if (data.hasPassword) {
+          document.getElementById('step-code').classList.add('hidden');
+          document.getElementById('step-login').classList.remove('hidden');
+          return;
+        }
+
+        document.getElementById('code-message').textContent = data.message || 'Check your Discord DMs from Clea.';
+        document.getElementById('code-input').focus();
+      } catch {
+        document.getElementById('code-message').textContent = 'Failed to send code. Try again.';
+      }
+    });
+
+    document.getElementById('confirm-no').addEventListener('click', () => {
+      document.getElementById('step-confirm').classList.add('hidden');
+      showCharacterPicker();
+    });
 
     // Enter on password fields
     document.getElementById('login-password').addEventListener('keydown', e => {
