@@ -289,7 +289,8 @@
       data.characters.forEach(c => {
         const btn = document.createElement('button');
         btn.className = 'character-btn';
-        btn.innerHTML = `${c.display} <span class="handle">${c.handle}</span>`;
+        const levelTag = c.level ? `<span class="handle">(Lvl ${c.level})</span>` : `<span class="handle">(New)</span>`;
+        btn.innerHTML = `${c.display} ${levelTag} <span class="handle">${c.handle}</span>`;
         btn.addEventListener('click', () => pickCharacter(c));
         list.appendChild(btn);
       });

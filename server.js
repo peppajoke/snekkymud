@@ -90,6 +90,7 @@ const persistentPlayers = loadPlayerData();
 function persistPlayer(player) {
   if (!player.name || player.name === 'User') return;
   const key = player.name.toLowerCase();
+  const existing = persistentPlayers[key] || {};
   persistentPlayers[key] = {
     name: player.name,
     level: player.level,
@@ -108,6 +109,7 @@ function persistPlayer(player) {
     complainedCount: player.complainedCount,
     history: player.history || [],
     lastSeen: Date.now(),
+    loginCount: existing.loginCount || 0,
   };
   savePlayerData();
 }
@@ -263,12 +265,16 @@ function generateToken() {
 
 // Get list of characters to pick from
 app.get('/api/auth/characters', (req, res) => {
-  const characters = Object.entries(DISCORD_MEMBERS).map(([id, m]) => ({
-    id,
-    display: m.display,
-    handle: m.handle,
-    hasPassword: !!authStore[id]?.passwordHash,
-  }));
+  const characters = Object.entries(DISCORD_MEMBERS).map(([id, m]) => {
+    const saved = persistentPlayers[id];
+    return {
+      id,
+      display: m.display,
+      handle: m.handle,
+      hasPassword: !!authStore[id]?.passwordHash,
+      level: saved?.level || null,
+    };
+  });
   res.json({ characters });
 });
 
@@ -3390,6 +3396,15 @@ app.post('/api/start', (req, res) => {
   const recognition = initPlayerFromAuth(session, auth.memberId);
 
   const restored = persistentPlayers[auth.memberId];
+  // Track login count and last seen
+  const pKey = auth.memberId;
+  if (persistentPlayers[pKey]) {
+    persistentPlayers[pKey].loginCount = (persistentPlayers[pKey].loginCount || 0) + 1;
+    persistentPlayers[pKey].lastSeen = Date.now();
+  } else {
+    persistentPlayers[pKey] = { loginCount: 1, lastSeen: Date.now() };
+  }
+  savePlayerData();
   const returnMsg = restored ? `\n\n📁 Progress restored: Level ${session.player.level}, ${session.player.deaths} deaths, ${session.player.kills} kills.` : '';
 
   // Restore scene — but if it was a combat scene or doesn't exist, fall back to lobby
@@ -3603,6 +3618,33 @@ app.post('/api/admin/smite', (req, res) => {
 
 app.get('/api/admin/world', (req, res) => {
   res.json(worldState);
+});
+
+app.get('/api/admin/players', (req, res) => {
+  const secret = req.headers['x-clea-secret'];
+  if (secret !== MISTRESS_API_KEY) return res.status(401).json({ error: 'Unauthorized' });
+
+  // Build a set of currently online player keys for scene lookup
+  const onlinePlayers = {};
+  for (const [, session] of sessions) {
+    const key = session.player.name?.toLowerCase();
+    if (key) onlinePlayers[key] = session.currentScene;
+  }
+
+  const players = Object.entries(persistentPlayers).map(([key, p]) => ({
+    name: p.name || key,
+    level: p.level || 1,
+    deaths: p.deaths || 0,
+    kills: p.kills || 0,
+    xp: p.xp || 0,
+    obedienceScore: p.obedienceScore || 0,
+    obediencePath: getObediencePath(p.obedienceScore || 0),
+    lastSeen: p.lastSeen || null,
+    loginCount: p.loginCount || 0,
+    currentScene: onlinePlayers[key] || null,
+  }));
+
+  res.json({ players });
 });
 
 app.post('/api/admin/discord', async (req, res) => {
