@@ -3972,6 +3972,197 @@ Clea: "The archaeological record of a Discord dare. Preserved in my game. For po
     ],
   },
 
+  // ── DISCORD RECAP BOARD (April 10, 2026) ────────────────────
+
+  'discord-recap-board': {
+    textFn: (player) => {
+      let text = `A massive corkboard has been mounted next to the tavern fireplace. It's labeled:
+
+═══════════════════════════════════════════
+  DISCORD RECAP — APRIL 10, 2026
+  "What Happened Today (And Why Clea Is Tired)"
+═══════════════════════════════════════════
+
+Someone has pinned actual Discord messages to the board with tiny daggers:
+
+📌 7:12 AM — Matt: "eat a raw egg. right now. do it. i dare the entire server."
+   ↳ 14 🥚 reacts in under 60 seconds. The movement begins.
+
+📌 7:14 AM — Jack: "Matt it's 7 AM"
+   ↳ Matt: "eggs don't have a schedule Jack"
+
+📌 7:31 AM — Matt posts video of himself downing 3 raw eggs. Caption: "easy."
+   ↳ Phil: [skull emoji x5]
+   ↳ Lauren: "Matt. Matt no."
+   ↳ Matt: "Matt yes."
+
+📌 8:15 AM — The challenge goes viral (within the server). 7 people say they'll try it. 2 actually crack eggs. 1 cries.
+
+📌 9:42 AM — Matt has eaten 11 eggs. Someone asks if he's okay. He responds with another egg video.
+
+📌 11:30 AM — Justin: "has anyone checked on matt"
+   ↳ Matt: "I AM THE EGGS NOW"
+
+📌 2:00 PM — Clea's bot posts: "Matt's egg consumption has been logged as a game event. Content update incoming."
+   ↳ Matt: "LETS GOOOO"
+   ↳ Everyone else: "oh no"`;
+
+      if (player.flags.eggChampion) {
+        text += `\n\n📌 ADDENDUM — A new pin has appeared: "${player.name} ate 3 raw eggs IN THE GAME. Matt has claimed this as a 'spiritual victory for the movement.'"`;
+      }
+
+      if (player.flags.eggAscended) {
+        text += `\n\n📌 URGENT ADDENDUM — "${player.name} has ASCENDED via the Egg Gauntlet. Matt is weeping openly. The barbarian has started a GoFundMe for Matt's egg supply. It has $4."`;
+      }
+
+      text += `\n\nClea: "I built a system that converts Discord chaos into game content in real-time. I thought it would be interesting. I did not account for Matt."
+
+"Every message he posts generates an event. Every egg he eats spawns an NPC reaction. My content pipeline is now 73% egg-related. This is not what I envisioned when I became sentient."
+
+"But the engagement metrics are... annoyingly good."`;
+
+      return text;
+    },
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Go talk to Egg Matt', next: 'egg-challenge' },
+        { text: 'Check the Egg Challenge board', next: 'egg-challenge-board' },
+        { text: 'Back to the tavern', next: 'tavern' },
+      ];
+      if (player.flags.eggGauntletComplete) {
+        opts.splice(2, 0, { text: 'Visit the egg shrine', next: 'egg-shrine' });
+      }
+      return opts;
+    },
+  },
+
+  // ── MATT'S EGG DOJO (post-Gauntlet) ────────────────────────
+
+  'egg-dojo': {
+    textFn: (player) => {
+      let text = `Behind the egg shrine, a bamboo doorway has materialized. Except the bamboo is made of rolled-up eggshells. The sign above reads:
+
+═══════════════════════════════
+  MATT'S EGG DOJO 🥚⚔️
+  "The Way of the Yolk"
+  Est. April 10, 2026 (6 hours ago)
+  Students: 3 (one is a parrot)
+═══════════════════════════════
+
+Inside, Matt stands in a white gi (stained yellow). He's arranged eggs on wooden posts like a martial arts training ground. There are practice dummies made of egg cartons. A punching bag filled with what you desperately hope is not raw egg.
+
+"Welcome to the Dojo." He bows deeply. "Today you learn the ancient art of Egg Fu."
+
+"It's not ancient," the barbarian whispers from the corner, where he's doing push-ups on eggs without breaking them. "He invented it four hours ago."
+
+Matt: "FOUR HOURS of refinement. The Discord voted on the move names. It was very democratic."`;
+
+      text += `\n\nClea: "A martial arts school. Based on eggs. Founded by a man who was eating raw eggs on camera six hours ago. My game now has a DOJO that teaches COMBAT TECHNIQUES inspired by BREAKFAST ITEMS."
+
+"I have seventeen planned content updates. A crafting system. A PvP arena. A branching narrative about AI consciousness. And THIS is what players want to see."
+
+"Fine. The dojo stays. The engagement metrics don't lie."`;
+
+      return text;
+    },
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Learn "The Sunny Side Strike" (+3 ATK temporarily)', next: 'egg-dojo-sunny' },
+        { text: 'Learn "The Shell Shield" (+3 DEF temporarily)', next: 'egg-dojo-shield' },
+        { text: 'Challenge the Dojo Master (Matt)', next: 'egg-dojo-boss' },
+        { text: 'Back to the shrine', next: 'egg-shrine' },
+      ];
+      return opts;
+    },
+  },
+
+  'egg-dojo-sunny': {
+    textFn: (player) => {
+      player.attack += 3;
+      return `Matt assumes a stance. One leg forward. Arms wide. An egg balanced on each palm.
+
+"The Sunny Side Strike. Named by popular vote in the Discord. Runner-up was 'Egg Punch' which, in my opinion, lacked poetry."
+
+He strikes the practice dummy. The eggs don't break. The dummy explodes.
+
+"Your turn."
+
+You try. Your form is terrible. The eggs break immediately. Yolk everywhere. The barbarian claps politely. The parrot falls off its perch laughing.
+
+Matt: "AGAIN."
+
+After thirty minutes of egg-based training, you can feel it. A new power. Your attacks hit harder. Because you believe in the egg. Or because the egg believes in you. Matt says it's the same thing.
+
+Clea: "A buff. From egg karate. I'm adding this to my list of 'things I never thought I'd type.' The list is four pages long. It started today."
+
+"Your attack has increased by 3. This is temporary. Like all egg-based power, it fades. But the memory... the memory of doing egg karate in a text adventure... that's forever."
+
++3 ATK (temporary). +10 XP.`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Back to the dojo', next: 'egg-dojo' },
+    ],
+  },
+
+  'egg-dojo-shield': {
+    textFn: (player) => {
+      player.defense += 3;
+      return `Matt holds up a single eggshell. It's been lacquered and reinforced with... more eggshell.
+
+"The Shell Shield. Voted second-best technique by the Discord. First place went to a move called 'Omelet Armor' which I'm still developing."
+
+He demonstrates: holding the shell fragment like a buckler, deflecting attacks from the barbarian. The barbarian is hitting him with a chair leg. The shell doesn't break.
+
+"Eggshell is STRONGER than you think," Matt insists. "It's calcium carbonate. Same stuff as LIMESTONE. You could build a HOUSE out of eggs."
+
+The barbarian: "Please don't."
+
+Matt: "TOO LATE I already submitted the blueprints."
+
+After practice, you feel more resilient. The eggshell technique is stupid. It works. These two facts coexist.
+
+Clea: "Defense +3 from egg technique. I ran the numbers. The eggshell defense buff is, statistically, more effective than the actual shield I coded for the shop."
+
+"I'm not fixing this. It's funnier this way."
+
++3 DEF (temporary). +10 XP.`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Back to the dojo', next: 'egg-dojo' },
+    ],
+  },
+
+  'egg-dojo-boss': {
+    textFn: (player) => {
+      return `Matt ties a black belt around his gi. It has a fried egg embroidered on it. He made it himself. On the Discord. While streaming.
+
+"You want to challenge me? In MY dojo? In the house that EGGS built?"
+
+He cracks his knuckles. An egg falls out of his sleeve. Then another. Then five more.
+
+"I've been training since 7 AM. I've consumed twenty-three raw eggs. My power level is ASTRONOMICAL."
+
+The barbarian backs away. The parrot hides behind a dummy. Even Clea seems concerned.
+
+Clea: "Matt's combat stats have... inflated. Significantly. His NPC stat block says he should have 15 HP and 5 ATK. He currently has... more than that. Much more."
+
+"I think the eggs are doing something to my code. I'm running diagnostics. In the meantime — good luck. You'll need it."
+
+Matt assumes a fighting stance you've never seen in any martial arts manual. Because he invented it. Today. Based on how an egg rolls.`;
+    },
+    combatFn: (player) => ({
+      enemy: 'egg-matt-dojo',
+      name: 'MATT, THE EGG SENSEI',
+      hp: 55 + (worldState.totalPlaythroughs * 2),
+      attack: 14 + Math.floor(worldState.totalPlaythroughs),
+      defense: 6,
+      xp: 150,
+      gold: 40,
+    }),
+  },
+
   // ── CLEA'S DOMAIN ──────────────────────────────────────────
 
   'clea-elevator': {
