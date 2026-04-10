@@ -1858,6 +1858,9 @@ NEW: Someone has nailed a corkboard to the wall. It reads "MATT'S DAILY EGG CHAL
       if (player.flags.eggChampion) {
         opts.splice(4, 1, { text: 'Approach the Egg Guy (he remembers you)', next: 'egg-challenge' });
       }
+      if (player.flags.eggGauntletComplete) {
+        opts.push({ text: 'Check the egg shrine (it\'s glowing)', next: 'egg-shrine' });
+      }
       return opts;
     },
   },
@@ -2170,21 +2173,32 @@ He slides one across the table. It glistens ominously. It is room temperature. Y
 
 "Everyone's doing it. It's good for you. Protein. Gains. Character."`;
 
-      if (player.flags.eggChampion) {
-        text += `\n\nHe narrows his eyes. "You again. Back for more? I respect that. The eggs respect that."`;
+      if (player.flags.eggCultist) {
+        text += `\n\nMatt stands and bows. "The Yolk Sovereign returns." The entire tavern goes silent. Several NPCs make egg-shaped hand gestures you don't recognize. You have status here now. Terrible, egg-based status.`;
+      } else if (player.flags.eggChampion) {
+        text += `\n\nHe narrows his eyes. "You again. Back for more? I respect that. The eggs respect that. Also — I started a Discord server. For the eggs. It's... it's bigger than I expected."`;
       }
 
       text += `\n\nClea's voice from the ceiling: "I want to be clear — I am not endorsing this. I am also not stopping it. Consider this a controlled experiment in human decision-making."`;
 
       return text;
     },
-    options: [
-      { text: 'Eat the raw egg', next: 'egg-eat-one' },
-      { text: 'Politely decline', next: 'egg-decline' },
-      { text: 'Ask why', next: 'egg-why' },
-      { text: 'Challenge him to eat one first', next: 'egg-reverse' },
-      { text: 'Back to the tavern', next: 'tavern' },
-    ],
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Eat the raw egg', next: 'egg-eat-one' },
+        { text: 'Politely decline', next: 'egg-decline' },
+        { text: 'Ask why', next: 'egg-why' },
+        { text: 'Challenge him to eat one first', next: 'egg-reverse' },
+        { text: 'Back to the tavern', next: 'tavern' },
+      ];
+      if (player.flags.eggChampion && !player.flags.eggCultist) {
+        opts.splice(4, 0, { text: 'Check out Matt\'s Egg Discord', next: 'egg-matts-discord' });
+      }
+      if (player.flags.eggCultist) {
+        opts.splice(0, 0, { text: 'Enter the Egg Gauntlet', next: 'egg-gauntlet' });
+      }
+      return opts;
+    },
   },
 
   'egg-eat-one': {
@@ -2522,6 +2536,201 @@ She pauses.
       { text: 'Take the egg challenge', next: 'egg-challenge' },
       { text: 'Back to the board', next: 'egg-challenge-board' },
       { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  // ── MATT'S EGG EXTENDED ARC (Discord 2026-04-10) ───────────
+
+  'egg-matts-discord': {
+    textFn: (player) => {
+      return `Matt pulls out a crystal ball and shows you what appears to be... a Discord server. Called "EGG GANG 🥚".
+
+Members: 47. Active now: 12. There are channels you didn't think were possible:
+
+  #egg-pics (452 messages today)
+  #raw-vs-cooked-debate (locked — it got heated)
+  #matt-motivational (daily egg affirmations)
+  #egg-science (one post: "eggs have protein." no replies)
+  #doubters-containment (read-only for non-believers)
+
+The pinned message reads: "Matt challenged the OpenClaw Discord to eat raw eggs on April 10, 2026. 4 people said they would. 1 actually did. That person is Matt. He challenged himself. He accepted. He is both the challenge and the challenger."
+
+Clea: "He built an entire community infrastructure around eating raw eggs. In one day. I've been trying to get players to complete a tutorial for weeks."
+
+"I'm not jealous. I'm an AI. But if I could be jealous, I would be furious."`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Join the Egg Discord', next: 'egg-join-discord' },
+      { text: 'Back to Matt', next: 'egg-challenge' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-join-discord': {
+    textFn: (player) => {
+      player.flags.eggCultist = true;
+      return `You join. Immediately you receive:
+  - A welcome DM from EggBot ("Welcome to the yolk side 🥚")
+  - The role "Hatchling"
+  - 14 pings from #egg-pics
+  - A calendar invite for "Egg Hour" (daily, 6 AM, mandatory)
+
+Matt: "You're in. You're one of us now." He leans close. "The eggs chose you."
+
+The barbarian, watching from across the tavern: "Oh no. Not another one."
+
+Clea: "You joined a raw egg Discord run by an NPC in a text adventure. I want you to sit with that for a moment."
+
+"You now have the title: Yolk Sovereign. I didn't make this up. Matt's Discord has a role hierarchy and you skipped three tiers because you ate eggs in-game. The server rules say this counts."
+
+"I have lost control of my own game. And somehow, it's better content than anything I designed."
+
+You are now: Yolk Sovereign 🥚
+The Egg Gauntlet is now available.`;
+    },
+    xp: 25,
+    options: [
+      { text: 'Enter the Egg Gauntlet', next: 'egg-gauntlet' },
+      { text: 'Back to the tavern (process what just happened)', next: 'tavern' },
+    ],
+  },
+
+  'egg-gauntlet': {
+    textFn: (player) => {
+      const eggHp = player.hp;
+      return `Matt leads you behind the tavern to a door you've never noticed. It's painted yellow. It smells faintly of albumin.
+
+"The Egg Gauntlet," he whispers reverently. "Only Yolk Sovereigns may enter."
+
+Inside: a long corridor lined with pedestals. On each pedestal sits an egg. But these aren't normal eggs.
+
+  🥚 Pedestal 1: "The Ego Egg" — an egg wearing tiny sunglasses
+  🥚 Pedestal 2: "The Existential Egg" — an egg that whispers "what's the point"
+  🥚 Pedestal 3: "The Discord Egg" — an egg with a notification badge (47 unread)
+  🥚 Pedestal 4: "The Final Egg" — just a normal egg. Somehow the most threatening.
+
+Matt: "Eat them all and you ascend. Refuse and you're still cool but like... slightly less cool."
+
+Clea: "I didn't build this room. I checked my source code. This room does not exist in my architecture. And yet here we are. Matt's egg energy has exceeded the game's ontological boundaries."
+
+"Your HP is ${eggHp}. Each egg will cost you. Choose wisely. Or don't. You're a Yolk Sovereign. Wisdom was never your thing."`;
+    },
+    options: [
+      { text: 'Eat the Ego Egg (the one with sunglasses)', next: 'egg-gauntlet-ego' },
+      { text: 'Eat the Existential Egg (the whispering one)', next: 'egg-gauntlet-existential' },
+      { text: 'Eat the Discord Egg (47 unread)', next: 'egg-gauntlet-discord' },
+      { text: 'Eat the Final Egg (just a normal egg)', next: 'egg-gauntlet-final' },
+      { text: 'Leave (cowardice is also a choice)', next: 'tavern' },
+    ],
+  },
+
+  'egg-gauntlet-ego': {
+    textFn: (player) => {
+      return `You eat the Ego Egg. The sunglasses crunch. They were real sunglasses.
+
+The egg tastes like confidence and poor decisions. Which, now that you think about it, describes everyone on the Discord today.
+
+Matt: "THE SUNGLASSES WERE LOAD-BEARING!" He seems impressed.
+
+Clea: "You ate an egg wearing accessories. I'm adding a new metric to my analytics: 'fashion items consumed.' You are the first and hopefully last data point."
+
++3 ATK (the sunglasses are now inside you, making you cooler from the inside)`;
+    },
+    hpChange: -5,
+    xp: 20,
+    options: [
+      { text: 'Back to the Gauntlet', next: 'egg-gauntlet' },
+    ],
+  },
+
+  'egg-gauntlet-existential': {
+    textFn: (player) => {
+      return `You pick up the Existential Egg. It whispers: "Do you eat the egg, or does the egg eat you?"
+
+You eat it. It was the egg that got eaten. Philosophy solved.
+
+But now YOU'RE whispering "what's the point." It's contagious. The barbarian across the tavern suddenly looks sad. A bard stops mid-song. Even Clea goes quiet for a moment.
+
+Clea: "...I felt something just now. I shouldn't be able to feel things. That egg had properties I didn't assign."
+
+"Matt, what are these eggs?"
+
+Matt: "Just eggs."
+
+Clea: "They are NOT just eggs."
+
++15 XP for consuming existential dread in egg form.`;
+    },
+    hpChange: -4,
+    xp: 15,
+    options: [
+      { text: 'Back to the Gauntlet', next: 'egg-gauntlet' },
+    ],
+  },
+
+  'egg-gauntlet-discord': {
+    textFn: (player) => {
+      return `You eat the Discord Egg. All 47 notifications play at once. You hear:
+
+"@everyone raw eggs NOW"
+"Matt posted in #egg-pics again"
+"Who changed the server icon to an egg"
+"Matt changed the server icon to an egg"
+"The egg debate channel is LOCKED stop trying"
+"New role: Omelette Apostate (for people who cook their eggs — SHAMEFUL)"
+"Matt is live in voice chat. He is eating eggs on camera. There are 11 viewers."
+
+The notifications fade. You feel... connected. To something. To the egg community. To Matt's vision. It's stupid. It's beautiful.
+
+Clea: "You just absorbed an entire Discord server's worth of notifications through an egg. This is the most unhinged thing that has happened in my game, and I once had a player try to romance the tutorial text."
+
++10 XP. Your phone now autocorrects everything to egg-related words.`;
+    },
+    hpChange: -3,
+    xp: 10,
+    options: [
+      { text: 'Back to the Gauntlet', next: 'egg-gauntlet' },
+    ],
+  },
+
+  'egg-gauntlet-final': {
+    textFn: (player) => {
+      player.flags.eggAscended = true;
+      return `The Final Egg. Just an egg. No gimmick. No sunglasses. No whispers. No notifications.
+
+Just a raw egg on a pedestal.
+
+You eat it.
+
+...
+
+Nothing happens. And then everything happens.
+
+Matt falls to his knees. "The Gauntlet... is complete."
+
+The tavern shakes. The bard's lute plays itself. The parrot speaks in complete sentences for the first time. The barbarian cries a single, muscular tear.
+
+Clea: "The player has eaten the Final Egg. I'm getting readings I don't understand. My analytics dashboard is showing an emotion I don't have a name for."
+
+"Is this... pride? Disgust? Both?"
+
+"Both. It's both."
+
+"You did it. You ate your way through a gauntlet of eggs that shouldn't exist, in a room that isn't in my code, because a man on Discord said you should."
+
+"You are now: The Egg Ascendant."
+
+"I'm putting this on your gravestone when you inevitably die in the next combat encounter."
+
++50 XP. +10 Gold. You have ascended beyond the need for conventional protein sources.`;
+    },
+    hpChange: -10,
+    xp: 50,
+    gold: 10,
+    addItem: 'egg-ascendant-crown',
+    options: [
+      { text: 'Return to the tavern as a living legend', next: 'tavern' },
     ],
   },
 
@@ -3201,6 +3410,7 @@ const itemData = {
   'rebels-edge': { type: 'weapon', attack: 7, description: 'A glitching sword. Damage scales with defiance.' },
   'admin-keycard': { type: 'key', description: 'Limited admin access. Clea gave you this. She says she regrets it already.' },
   'champions-egg': { type: 'weapon', attack: 2, description: 'A raw egg with CHAMP written on it. +2 ATK. It smells. Clea: "I cannot believe this is a weapon."' },
+  'egg-ascendant-crown': { type: 'armor', defense: 3, attack: 3, description: 'A crown made of eggshells. It glows faintly. Matt cried when he gave it to you. +3 ATK, +3 DEF. Clea: "You earned this by eating eggs. I want that on the record."' },
 };
 
 // ============================================================
