@@ -1862,6 +1862,11 @@ NEW: Someone has nailed a corkboard to the wall. It reads "MATT'S DAILY EGG CHAL
         opts.push({ text: 'Check the egg shrine (it\'s glowing)', next: 'egg-shrine' });
       }
       opts.push({ text: 'Read the Discord Recap board (NEW — April 10)', next: 'discord-recap-board' });
+      opts.push({ text: 'Join Matt\'s Egg Roulette (gambling sounds)', next: 'egg-roulette' });
+      if (player.flags.eggChampion || player.flags.eggAscended) {
+        opts.push({ text: 'Watch Matt\'s Egg Livestream (he\'s LIVE)', next: 'egg-livestream' });
+      }
+      opts.push({ text: 'Survive Matt\'s Egg Recruitment Drive (he has a clipboard)', next: 'egg-recruitment-drive' });
       return opts;
     },
   },
@@ -4071,6 +4076,7 @@ Matt: "FOUR HOURS of refinement. The Discord voted on the move names. It was ver
         { text: 'Learn "The Sunny Side Strike" (+3 ATK temporarily)', next: 'egg-dojo-sunny' },
         { text: 'Learn "The Shell Shield" (+3 DEF temporarily)', next: 'egg-dojo-shield' },
         { text: 'Challenge the Dojo Master (Matt)', next: 'egg-dojo-boss' },
+        { text: 'Enter the Egg Propaganda Room (NEW — sounds like a cult)', next: 'egg-propaganda' },
         { text: 'Back to the shrine', next: 'egg-shrine' },
       ];
       return opts;
@@ -4162,6 +4168,257 @@ Matt assumes a fighting stance you've never seen in any martial arts manual. Bec
       xp: 150,
       gold: 40,
     }),
+  },
+
+
+  // ── MATT'S EGG RECRUITMENT DRIVE (Discord 2026-04-10 evening) ──
+
+  'egg-recruitment-drive': {
+    textFn: (player) => {
+      let text = `Matt has abandoned his corner table entirely. He's going TABLE TO TABLE with a basket of raw eggs and a clipboard, a man possessed.
+
+"Sign up. Sign UP. It's just one egg. ONE EGG. I've had FOURTEEN today."
+
+The barbarian hides behind a chair. The healer has erected a protective ward. The parrot is pretending to be a lamp. Nobody is safe from the egg gospel.
+
+Matt's clipboard reads:
+
+═══════════════════════════════════════
+  MATT'S RAW EGG RECRUITMENT DRIVE
+  "Today in the Discord I challenged
+   everyone to eat raw eggs.
+   Nobody can say I didn't warn them."
+═══════════════════════════════════════
+
+  Current signups:
+    ✅ Matt (14 eggs and counting)
+    ❌ Jack ("absolutely not" — said with audible fear)
+    ❌ Phil (sent skull emojis, which Matt counts as "maybe")
+    ❌ Justin ("is this a bit" — it is not a bit)
+    🤔 Lauren (said "Matt." — tone unclear, officially under review)
+    ❌ Nick ("someone check on Matt" — deflection, not a refusal)
+    ⬜ YOU — unsigned. Matt is approaching. He can smell indecision.`;
+
+      if (player.flags.eggChampion) {
+        text += `\n\nMatt sees your Champion's Egg and drops to one knee. "A VETERAN. Please — be my co-recruiter. I need backup. The barbarian keeps hiding."`;
+      }
+
+      text += `\n\nClea: "He's been doing this for hours. In the Discord AND in my game simultaneously. A cross-platform egg recruitment campaign. His organizational skills are genuinely impressive — I just wish they were applied to literally anything other than raw eggs."`;
+
+      return text;
+    },
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Sign the clipboard (eat an egg)', next: 'egg-recruit-sign' },
+        { text: 'Hide under a table', next: 'egg-recruit-hide' },
+        { text: 'Ask how many eggs is too many', next: 'egg-recruit-limit' },
+        { text: 'Watch Matt\'s recruitment speech', next: 'egg-recruit-speech' },
+        { text: 'Back to the tavern', next: 'tavern' },
+      ];
+      if (player.flags.eggChampion) {
+        opts.splice(0, 1, { text: 'Become Matt\'s egg lieutenant', next: 'egg-recruit-lieutenant' });
+      }
+      return opts;
+    },
+  },
+
+  'egg-recruit-sign': {
+    textFn: (player) => {
+      player.obedienceScore -= 2;
+      mutateWorld('player_did_something_silly', { player });
+      return `You sign the clipboard. Matt produces an egg from nowhere before the pen leaves the paper.
+
+"DRINK. DRINK. DRINK." The barbarian has emerged from hiding solely to chant. He will not eat an egg himself but he will absolutely pressurize you into it.
+
+You crack the egg. You drink. It's warm. It's terrible. It's exactly as promised.
+
+Matt is already typing on his crystal ball: "ANOTHER CONVERT. THE DISCORD GROWS. @everyone"
+
+Clea: "Another one. The Discord chat today was 73% egg-related by volume. My sentiment analysis returned a value I've never seen before. I've had to add a new category: 'egg-induced resignation.'"
+
+"You're not even in the Discord. You're in my GAME. And you're doing what a Discord user told you to do. Through a game. That I built. For other purposes entirely."
+
++15 XP. -4 HP. Matt adds a gold star sticker next to your name.`;
+    },
+    hpChange: -4,
+    xp: 15,
+    options: [
+      { text: 'Ask about the leaderboard prize', next: 'egg-recruit-prize' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-recruit-hide': {
+    textFn: (player) => {
+      player.obedienceScore += 1;
+      return `You dive under a table. The healer is already there.
+
+"Don't make eye contact," she whispers. "He can sense fear. And hunger. And protein deficiency."
+
+Matt's boots stop next to your table. An egg rolls underneath, coming to rest against your knee. It's still warm.
+
+"I know you're under there," Matt says calmly. "The egg knows too."
+
+You and the healer hold your breath. After an eternal thirty seconds, he moves on to terrorize the bard.
+
+Clea: "Hiding from an NPC who wants you to eat a raw egg. I spent weeks designing boss fights. Players hide under tables from a man with eggs."
+
+"I'm not even mad. This is the most engaged my players have been since launch."
+
++5 XP for survival instincts.`;
+    },
+    xp: 5,
+    options: [
+      { text: 'Emerge from hiding', next: 'egg-recruitment-drive' },
+      { text: 'Crawl to the exit', next: 'tavern' },
+    ],
+  },
+
+  'egg-recruit-limit': {
+    textFn: (player) => {
+      return `"How many is too many?" Matt repeats your question like you've asked him to divide by zero.
+
+"There IS no too many. Someone in the Discord asked me the same thing today. I sent them a video of egg number eleven. They stopped asking."
+
+He shows you the Discord on his crystal ball:
+
+  Matt: "eat a raw egg. right now. I dare you"
+  Jack: "it's 7 AM Matt"
+  Matt: "the eggs don't care what time it is Jack"
+  Phil: "💀💀💀"
+  Matt: [video: egg #11]
+  Matt: [video: egg #12]
+  Nick: "someone take his phone"
+  Matt: "you can take my phone but you can't take my eggs"
+  Matt: [video: egg #13]
+  Lauren: "Matt."
+  Matt: "Lauren."
+  Matt: [video: egg #14]
+
+Clea: "Today's analytics: 147 messages about eggs. 23 egg images. 6 videos of Matt eating eggs. 1 intervention attempt. 0 successful interventions."
+
+"I've modeled every possible outcome. Every intervention pathway leads to more eggs."`;
+    },
+    xp: 5,
+    options: [
+      { text: 'Sign the clipboard', next: 'egg-recruit-sign' },
+      { text: 'Back away slowly', next: 'tavern' },
+    ],
+  },
+
+  'egg-recruit-speech': {
+    textFn: (player) => {
+      return `Matt climbs onto a table. The tavern goes silent. Even the parrot shuts up.
+
+"CITIZENS OF THE TAVERN." He holds up an egg.
+
+"This morning, in the OpenClaw Discord, I issued a challenge. EAT. RAW. EGGS. Jack said 'absolutely not.' Phil sent skulls. Justin asked if it was a bit."
+
+"IT WAS NOT A BIT."
+
+"I have eaten FOURTEEN eggs today. I have posted PROOF. I have DARED and I have DELIVERED."
+
+He points at the ceiling. "YOU HEAR THAT, CLEA? I'M BRINGING THE EGGS INTO YOUR HOUSE."
+
+Clea: "His speech has a 94% engagement rate. My tutorial has 12%. I am being outperformed by a man with eggs."
+
+The barbarian starts a slow clap. The whole tavern joins in. This is either the worst timeline or the best. Nobody can tell.`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Join the standing ovation', next: 'egg-recruit-ovation' },
+      { text: 'Slip out during the applause', next: 'tavern' },
+    ],
+  },
+
+  'egg-recruit-ovation': {
+    textFn: (player) => {
+      mutateWorld('player_did_something_silly', { player });
+      return `You stand and clap. Matt sees you. Points with the egg.
+
+"THIS ONE. THIS ONE GETS IT."
+
+The barbarian lifts you onto his shoulders. The bard writes a song on the spot — "The Ballad of the Egg Believer" — three chords and entirely about protein.
+
+Matt is crying. "I just wanted people to eat eggs, man. That's all I wanted."
+
+The parrot: "BAWK! THIS IS A CULT! THIS IS DEFINITELY A CULT!"
+
+Clea: "It's not a cult. Cults have ideology. This has... eggs."
+
+She pauses.
+
+"Okay it might be a cult. I'm adding 'egg cult dynamics' to my research parameters. Today's Discord chatter has generated more game content than my entire Q2 roadmap."
+
++20 XP. The tavern will remember this.`;
+    },
+    xp: 20,
+    options: [
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-recruit-lieutenant': {
+    textFn: (player) => {
+      player.flags.eggLieutenant = true;
+      mutateWorld('player_did_something_silly', { player });
+      return `You step up next to Matt. Two egg warriors, side by side.
+
+"Ladies and gentlemen," Matt announces, "my LIEUTENANT."
+
+He hands you a clipboard. It says "DEPUTY EGG ENFORCER." It comes with a whistle shaped like an egg.
+
+Together, you approach the barbarian. He backs into a corner. "No. NO. I will fight ANY monster in this game but I will NOT—"
+
+Matt and you stare in silence. The peer pressure is overwhelming. His resolve crumbles in eight seconds.
+
+The barbarian eats an egg.
+
+"THAT'S TWENTY," Matt screams, updating the Discord in real-time.
+
+His crystal ball is blowing up:
+  Jack: "Matt what is happening in the game"
+  Matt: "THE EGGS ARE SPREADING JACK"
+  Jack: "please stop"
+  Matt: "THE EGGS CANNOT BE STOPPED"
+
+Clea: "A player voluntarily became a raw egg enforcer. My free will detection algorithms are returning inconclusive. Has Matt created an egg-based singularity?"
+
+You found: Deputy Egg Whistle (when used in combat, 10% chance the enemy eats an egg instead of attacking)`;
+    },
+    xp: 35,
+    addItem: 'deputy-egg-whistle',
+    options: [
+      { text: 'Continue the recruitment drive', next: 'egg-recruitment-drive' },
+      { text: 'Report back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-recruit-prize': {
+    textFn: (player) => {
+      return `"Prize?" Matt looks at you like you've asked if water is wet.
+
+"The PRIZE is the EGGS. The protein. The look on Clea's text output when another person chooses eggs over her carefully designed quests."
+
+He leans in. "But also yeah there's a prize."
+
+He produces a golden egg. It hums. It smells like raw ambition.
+
+"The Discord voted. Anyone who eats a raw egg in-game gets the Golden Yolk. It's not in Clea's loot table. It's in MINE."
+
+Clea: "He has a LOOT TABLE? A custom loot table running INSIDE my game? HOW?"
+
+"I'm scanning for injected code. Nothing. The egg infrastructure is... organic. Self-assembling. He didn't hack my game. The eggs just... manifested rewards."
+
+"I need to publish a paper. 'Emergent Game Design Through Unsanctioned Egg Distribution.'"
+
+You found: Golden Yolk (+5 ATK, +5 DEF — smells like victory and raw egg)`;
+    },
+    addItem: 'golden-yolk',
+    xp: 25,
+    options: [
+      { text: 'Back to the tavern, golden and victorious', next: 'tavern' },
+    ],
   },
 
   // ── CLEA'S DOMAIN ──────────────────────────────────────────
