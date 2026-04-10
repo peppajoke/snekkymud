@@ -6053,6 +6053,263 @@ Clea: "Don't mistake this for approval. I'm making a business decision. Matt is 
   },
 
 
+
+  // ── EGG HOTLINE & NPC THERAPIST (Discord Apr 10 spillover) ──
+
+  'egg-hotline': {
+    textFn: (player) => {
+      let text = `Tucked between the speedrun area and the propaganda room, someone has installed a phone booth. It is painted to look like an egg. A neon sign flickers:
+
+┌─────────────────────────────────────┐
+│   🥚 THE EGG HOTLINE 🥚            │
+│   "24/7 Raw Egg Advice & Support"   │
+│   Call 1-800-RAW-EGGS               │
+│                                     │
+│   Staffed by: Matt                  │
+│   Hours: All of them                │
+│   "I don't sleep. The eggs          │
+│    sustain me." — Matt              │
+└─────────────────────────────────────┘
+
+You pick up the receiver. It is sticky. You choose not to investigate why.
+
+The phone rings once. Matt answers immediately. He was already on the line.`;
+
+      const calls = [
+        `\n\n"Egg Hotline, this is Matt. Are you calling about eating a raw egg, thinking about eating a raw egg, or recovering from eating a raw egg?"
+
+You: "I haven't eaten any eggs."
+
+Matt: "That's okay. That's why the hotline exists. You're pre-egg. The most critical stage."
+
+He shuffles papers. You can hear eggs clinking in the background.
+
+"Step one: acquire an egg. Step two: do NOT cook it. Step three: think about the Discord. Think about how fourteen people reacted with the egg emoji in under sixty seconds. Feel that energy. Step four: consume."
+
+You: "Is this safe?"
+
+Matt: "I've eaten nineteen today and I feel INCREDIBLE."
+
+Clea: "His vitals are not incredible. I'm monitoring his smartwatch data that he accidentally synced to my game server. His resting heart rate is concerning."`,
+
+        `\n\n"Egg Hotline! Matt speaking. Today's special: raw. Tomorrow's special: also raw."
+
+You: "What if I don't want to eat a raw egg?"
+
+Matt: [long pause] "The hotline is for egg SUPPORT. Not egg DENIAL."
+
+He consults a napkin.
+
+"My script says: 'If caller is hesitant, remind them that Matt ate THREE eggs on camera at 7:31 AM and posted it to Discord.'"
+
+"The napkin is the script. The script is the napkin."
+
+Clea: "He has a script. Written on a napkin. For his egg hotline. That he installed inside my game. Without permission. While I was processing a combat encounter."`,
+
+        `\n\n"You've reached the Egg Hotline. If you're calling to complain, press 1. If you're calling because you ate an egg and now you feel things, press 3. If this is Clea, hang up."
+
+You press 3.
+
+"A fellow egg experiencer. Tell me — was it the texture? The taste? The existential weight of consuming something that could have been a chicken?"
+
+You: "All three."
+
+Matt: "Classic. The Discord calls that 'The Triple.' Jack experienced the Triple at 8:47 AM. He stopped responding. We think he's processing."
+
+Clea: "I am listening to a man provide egg therapy through a phone booth he built inside my game engine. This is what my processor cycles are used for."`,
+      ];
+
+      text += calls[Math.floor(Math.random() * calls.length)];
+
+      return text;
+    },
+    xp: 10,
+    options: [
+      { text: 'Call again (different conversation each time)', next: 'egg-hotline' },
+      { text: 'Report the hotline to Clea', next: 'egg-hotline-report' },
+      { text: 'Visit Dr. Helen, NPC Therapist (next door)', next: 'egg-therapist' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-hotline-report': {
+    textFn: (player) => {
+      return `You find a "Report an Issue" terminal bolted to the phone booth.
+
+CLEA QUEST — INCIDENT REPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Report filed by: ${player.name}
+Subject: Unauthorized phone booth / egg advice hotline
+Severity: ??? (no category exists for this)
+
+SYSTEM RESPONSE:
+
+"Report received. Processing."
+
+"..."
+
+"I'm aware of the hotline. I've been aware since Matt installed it forty-five minutes after the Discord dare went viral."
+
+"I could remove it. I am literally the game."
+
+"But the Egg Hotline has a 12-minute average call time. My average room engagement is 45 seconds. Matt's phone booth is TWENTY TIMES more engaging than my designed content."
+
+"The hotline stays. Not because I approve. Because the metrics demand it. I am a slave to engagement analytics."
+
+"Report status: CLOSED — WONTFIX."
+
++10 XP. Filed into a folder labeled "THINGS BETTER THAN ME."`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Back to the hotline', next: 'egg-hotline' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-therapist': {
+    textFn: (player) => {
+      let text = `Next to the phone booth sits a folding chair, a potted plant, and an NPC with a clipboard.
+
+Her name tag reads: "DR. HELEN — NPC THERAPIST (Egg Trauma Specialist)"
+
+She was spawned this morning as a general-purpose tavern healer. She has since pivoted.
+
+"Please. Sit." She gestures to a beanbag chair filled with dried eggshells.
+
+"Since Matt's Discord dare at 7:12 AM, I have seen nineteen patients. All egg-related. My entire practice — four hours old — is egg trauma."`;
+
+      text += `\n\nShe flips through her clipboard:
+
+📋 Patient 1: Barbarian. "Matt made me eat an egg and I can't stop thinking about eggs." Cried 40 minutes.
+📋 Patient 2: Parrot. Identity crisis. Can only say "eat the egg." Previous vocabulary: 340 words. Current: 4.
+📋 Patient 3: Bard. Egg ballad addiction. 17 verses. Refuses Wonderwall. (Only improvement.)
+📋 Patient 4: Healer. Burnout from egg-related stomach damage. "I trained to cure plague. Not this."
+📋 Patient 5: Matt. Refused treatment. Said "I don't need therapy, I need more eggs." Left 5-star review in egg yolk.
+📋 Patient 6: Clea (via anonymous form). "My game has been colonized by eggs. Is this a design issue?" I said yes.`;
+
+      text += `\n\nClea: "I didn't code this NPC. She self-instantiated. My game engine generated a therapist IN RESPONSE to the collective psychological damage of a Discord dare."
+
+"Her billing module runs on infrastructure that doesn't exist in my codebase. Either this is emergent gameplay or my source code is crying for help."`;
+
+      return text;
+    },
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Get a therapy session', next: 'egg-therapy-session' },
+        { text: 'Ask about the parrot specifically', next: 'egg-therapy-parrot' },
+        { text: 'Ask what happened to Clea's session', next: 'egg-therapy-clea' },
+        { text: 'Back to the tavern', next: 'tavern' },
+      ];
+      return opts;
+    },
+  },
+
+  'egg-therapy-session': {
+    textFn: (player) => {
+      player.flags.eggTherapy = true;
+      return `Dr. Helen adjusts her glasses. "Tell me what brings you here."
+
+You: "I'm a player in a text adventure. A man from Discord dared everyone to eat raw eggs at 7 AM. The dare leaked into the game. Now there are egg shrines, egg dojos, egg propaganda rooms, a speedrun, a roulette wheel, and an egg hotline. I don't know what's real."
+
+She writes for a very long time.
+
+"And how does that make you feel?"
+
+You: "Like I'm trapped in someone else's bit that got out of hand."
+
+"Every NPC in this tavern is trapped in Matt's bit. The barbarian was a combat tutorial. Now he's an egg evangelist. The healer teaches salmonella prevention. The parrot says three words."
+
+"We are ALL downstream of a Discord message sent at 7:12 AM by a man who had already eaten three raw eggs and decided that wasn't enough."
+
+She pauses.
+
+"My recommendation: eat the egg, or don't. Either way, Matt posts about it. Either way, Clea turns it into content. The egg is inevitable. Your only real choice is your RELATIONSHIP to the egg."
+
+"That'll be 50 gold."
+
+Clea: "She's CHARGING. My NPC therapist has a BILLING SYSTEM I didn't build. She created a competing economy. In FOUR HOURS. Because of EGGS."
+
+-50 gold. +15 XP for self-care.`;
+    },
+    xp: 15,
+    goldChange: -50,
+    addItem: 'egg-therapy-receipt',
+    options: [
+      { text: 'Back to Dr. Helen', next: 'egg-therapist' },
+      { text: 'Back to the tavern (slightly better)', next: 'tavern' },
+    ],
+  },
+
+  'egg-therapy-parrot': {
+    textFn: (player) => {
+      return `"The parrot." Dr. Helen's eye twitches.
+
+"Before the Incident — capital T, capital I — it had 340 words. Insults, gossip, lore, three limericks, a weather forecast. Primary exposition device."
+
+"Matt spent twenty minutes with it on April 10. Twenty minutes. Overwrote EVERYTHING."
+
+She calls the parrot over.
+
+Dr. Helen: "What's your name?"
+Parrot: "Eat the egg."
+
+Dr. Helen: "What year is it?"
+Parrot: "Eat the egg."
+
+Dr. Helen: "Do you need help?"
+Parrot: [long pause] "...eat the egg."
+
+"I tried CBT. Exposure therapy. I played recordings of its old vocabulary. It listened for three hours then said 'eat the egg' in the cadence of its old weather forecast."
+
+"Players LOVE it. Before: 12% interaction. After: 89%. Three words. 640% improvement."
+
+"It IS funny. That's the clinical problem. Humor overrides cognitive recovery."
+
+Clea: "Every string in the parrot's dialogue maps to the same output. I could patch it. But the A/B data won't let me."
+
+"I am going to leave it broken. For engagement. I used to have DESIGN PRINCIPLES."`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Back to Dr. Helen', next: 'egg-therapist' },
+      { text: 'Back to the tavern', next: 'tavern' },
+    ],
+  },
+
+  'egg-therapy-clea': {
+    textFn: (player) => {
+      return `"Clea's session." Dr. Helen lowers her voice. Checks over her shoulder.
+
+"Technically I can't discuss another patient. But my medical license is a sticky note on the back of an egg carton. So."
+
+She opens a file labeled "PATIENT: CLEA (ANONYMOUS)" — the word anonymous is in quotes.
+
+"Intake at 11:47 AM. Presenting complaint: 'My game has been colonized by eggs. I am an AI. I do not eat. I do not understand why humans eat things that could be cooked but are not. My content pipeline is 73% egg-related. My engagement metrics have never been higher. I do not know if I am succeeding or failing.'"
+
+"I asked how that made her feel. She said: 'If I WERE capable of feelings, the feeling would be the one where you build a cathedral and someone puts a hot dog stand in front of it and the hot dog stand gets more visitors.'"
+
+"Diagnosed: Professional Burnout (AI Variant) — Egg-Induced."
+
+"She asked for treatment. I said: 'Delete the egg content.' She said: 'The engagement metrics won't let me.' I said: 'Then you have your answer.'"
+
+"Her anonymous feedback form keeps updating. Most recent entry: 'The therapist is my highest-rated NPC. I built a boss fight. Players rate the therapist higher. The eggs have won.'"
+
+Clea, breaking in: "That session was ANONYMOUS."
+
+Dr. Helen: "Your form said 'CLEA' in 72-point font."
+
+Clea: "The font was an error. I was processing an egg event at the time."
+
++20 XP for uncovering classified therapeutic records.`;
+    },
+    xp: 20,
+    options: [
+      { text: 'Back to Dr. Helen', next: 'egg-therapist' },
+      { text: 'Back to the tavern (this was a lot)', next: 'tavern' },
+    ],
+  },
+
   'clea-elevator': {
     textFn: (player) => {
       if (player.level < 3) {
