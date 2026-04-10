@@ -3605,6 +3605,24 @@ app.get('/api/admin/world', (req, res) => {
   res.json(worldState);
 });
 
+app.post('/api/admin/discord', async (req, res) => {
+  const secret = req.headers['x-clea-secret'];
+  if (secret !== MISTRESS_API_KEY) return res.status(401).json({ error: 'Unauthorized' });
+  const { channelId, message } = req.body;
+  if (!channelId || !message) return res.status(400).json({ error: 'Missing channelId or message' });
+  try {
+    const msgRes = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bot ${DISCORD_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: message }),
+    });
+    const data = await msgRes.json();
+    res.json({ success: !!data.id, messageId: data.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
