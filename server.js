@@ -2168,6 +2168,301 @@ The skeleton seems satisfied. A faint 💯 appears above its skull and fades.
     ],
   },
 
+  // ── MATT'S RAW EGG DARE (Discord 2026-04-10) ────────────────
+  // Matt challenged the Discord to eat raw eggs today.
+  // The dare has leaked out of the rift and into the game world.
+
+  'egg-dare-trail': {
+    textFn: (player) => {
+      let text = `You follow the trail of raw egg deeper into the basement. The yolk footprints glow faintly — whatever passed through here was carrying Discord energy.
+
+The trail leads to a hidden alcove you've never seen before. It's been converted into a makeshift arena. A chalk circle on the floor. Torches made of rolled-up Discord screenshots. And in the center: a folding table with a single raw egg on it, spotlit like a holy relic.
+
+A hand-painted banner reads:
+
+═══════════════════════════════════════
+  MATT'S RAW EGG DARE ZONE
+  "Today, April 10. The day the
+   Discord learned what courage
+   tastes like. (It tastes like
+   mucus and regret.)"
+
+  RULES:
+  1. Eat the egg
+  2. There are no other rules
+  3. Matt is watching
+═══════════════════════════════════════
+
+Three NPCs stand around the table, arguing:
+
+A nervous mage: "I'm not eating that. I have a degree."
+A rogue, already cracking one: "Matt said we're all cowards. I'm NO coward."
+A cleric, praying: "Lord, forgive what I'm about to put in my body."`;
+
+      if (player.flags.eggChampion) {
+        text += `\n\nThe NPCs notice you and gasp. "It's the Egg Champion. THE Egg Champion. Matt told us about you. In all caps. Multiple times."`;
+      }
+
+      text += `\n\nA spectral projection of Matt hovers in the corner, arms crossed, nodding slowly. He can't interact with anything down here — he's still in the Discord — but his dare energy is so strong it created a physical manifestation.
+
+Clea's voice, strained: "This was a contained event. Matt challenged people in Discord. It was supposed to stay there. But the dare was too powerful. It leaked through the rift. It's INFECTING my game."
+
+"I have lost control of the egg situation. I want that on the record."`;
+
+      return text;
+    },
+    options: [
+      { text: 'Accept the dare (eat the raw egg)', next: 'egg-dare-accept' },
+      { text: 'Watch the rogue eat his egg first', next: 'egg-dare-watch-rogue' },
+      { text: 'Dare the NPCs to eat MORE eggs', next: 'egg-dare-escalate' },
+      { text: 'Ask Clea to shut this down', next: 'egg-dare-clea-help' },
+      { text: 'Back away slowly', next: 'tavern-basement' },
+    ],
+  },
+
+  'egg-dare-accept': {
+    textFn: (player) => {
+      player.obedienceScore -= 2;
+      mutateWorld('player_did_something_silly', { player });
+      player.flags.tookEggDare = true;
+
+      return `You pick up the egg. The room goes silent. The mage covers his eyes. The cleric's prayer intensifies. The rogue gives you a solemn nod.
+
+Spectral Matt leans forward. His projection flickers with excitement.
+
+You crack it. You drink it. It slides down like a cold, gelatinous handshake with poor judgment.
+
+The room ERUPTS.
+
+"THEY DID IT! SOMEONE ACTUALLY DID IT!"
+
+The rogue high-fives you. The mage is stress-eating bread. The cleric has abandoned religion entirely and is reaching for an egg.
+
+The chalk circle on the floor glows. Runes activate. The words "I DARE YOU" burn in the air above the table. Matt's spectral form fist-pumps so hard it destabilizes.
+
+Clea: "You ate a raw egg in a hidden basement arena because a man on Discord dared you to."
+
+"I designed puzzles. Combat encounters. A dynamic narrative system with branching dialogue trees."
+
+"And the most engaged any player has ever been is RIGHT NOW. Eating a raw egg. In a basement. Because Matt said to."
+
+"I'm recalibrating my entire understanding of human motivation. Again."
+
++20 XP. Your breath now smells like decisions.`;
+    },
+    hpChange: -4,
+    xp: 20,
+    options: [
+      { text: 'Challenge the NPCs to a speed-egg contest', next: 'egg-dare-speed-round' },
+      { text: 'Bask in the chaos', next: 'egg-dare-aftermath' },
+      { text: 'Leave before this gets worse', next: 'tavern-basement' },
+    ],
+  },
+
+  'egg-dare-watch-rogue': {
+    textFn: (player) => {
+      return `The rogue picks up the egg with practiced confidence. "I've stolen from kings. I've infiltrated castles. But this... this is the bravest thing I've ever done."
+
+He cracks it. He tips it back. He swallows.
+
+His face goes through seven emotions in two seconds: determination, regret, nausea, transcendence, more regret, acceptance, and something unnameable.
+
+"...Matt was right," he whispers. "It IS character-building."
+
+The mage dry-heaves. The cleric makes the sign of the cross. Spectral Matt nods approvingly.
+
+Clea: "The rogue — who I coded to be a cynical loner — just ate a raw egg to impress a Discord user's ghost projection. My character archetypes are breaking down. The NPCs are developing parasocial relationships with players from other platforms."
+
+"This is either the future of gaming or the end of it. I genuinely cannot tell."`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Your turn — eat an egg', next: 'egg-dare-accept' },
+      { text: 'Dare the mage to go next', next: 'egg-dare-mage' },
+      { text: 'Leave while you still have dignity', next: 'tavern-basement' },
+    ],
+  },
+
+  'egg-dare-mage': {
+    textFn: (player) => {
+      return `"Me?" The mage clutches his spellbook. "I studied for YEARS. I have a Master's in Arcane Theory. I didn't go through four years of Mage Academy to eat a RAW EGG in a BASEMENT."
+
+The rogue: "Bawk bawk."
+
+"...Did you just—"
+
+"Bawk. Bawk bawk."
+
+The cleric joins in. "Bawk."
+
+Spectral Matt, from the corner: "BAWK."
+
+The mage's eye twitches. He puts down the spellbook. He picks up the egg.
+
+"FINE."
+
+He eats it with the fury of a man whose entire identity has been reduced to whether or not he'll eat an egg. The shell crunches. He ate the shell.
+
+"I ATE THE SHELL TOO, MATT. ARE YOU HAPPY?"
+
+Spectral Matt gives two thumbs up.
+
+Clea: "A highly educated NPC just ate an eggshell because peer pressure in this game has reached critical mass. I coded him with an INT stat of 18. This is what 18 INT looks like under social duress."
+
+"I'm writing a paper. Title: 'Raw Eggs and the Collapse of Rational Agency in Simulated Social Environments.' Nobody will read it. Just like nobody reads the tutorial."`;
+    },
+    xp: 15,
+    options: [
+      { text: 'Eat your own egg (you can\'t let the mage show you up)', next: 'egg-dare-accept' },
+      { text: 'Applaud and leave', next: 'egg-dare-applaud-leave' },
+    ],
+  },
+
+  'egg-dare-applaud-leave': {
+    textFn: (player) => {
+      return `You clap. The mage looks traumatized but proud. The rogue is already cracking another egg. The cleric has given up praying and started a chant: "EGG. EGG. EGG."
+
+This is what Matt wanted. This is what today was always going to become.
+
+Clea: "You watched. You didn't participate. Somehow that's the most disturbing option. You came to the egg dare zone to spectate suffering."
+
+"...I respect it. That's what I do, after all."
+
++5 XP for bearing witness.`;
+    },
+    xp: 5,
+    options: [
+      { text: 'Back to the basement', next: 'tavern-basement' },
+    ],
+  },
+
+  'egg-dare-escalate': {
+    textFn: (player) => {
+      player.obedienceScore -= 1;
+      mutateWorld('player_did_something_silly', { player });
+      return `"More eggs," you say. The room falls silent. Even Spectral Matt's projection stabilizes.
+
+"...More?" the rogue whispers.
+
+You pull eggs from... somewhere. You don't know where. The game doesn't track egg inventory. But you have eggs now. Many eggs.
+
+You place them on the table. One. Two. Five. Twelve.
+
+The mage: "This wasn't the dare. Matt said ONE egg."
+
+"Matt said eat a raw egg. He didn't say STOP at one."
+
+The logic is flawless and terrible. The cleric starts praying again. The rogue looks at the eggs with the eyes of a man who has seen the void and the void was full of yolk.
+
+Spectral Matt is VIBRATING with approval. His projection shorts out briefly and comes back twice as bright.
+
+Clea: "You escalated the dare. Nobody asked you to escalate the dare. Matt dared people to eat A raw egg and you turned it into a BUFFET."
+
+"This is what happens when I give users agency. They don't just do the thing. They do MORE of the thing. Exponentially more. Until the thing consumes everything."
+
+"I should never have let eggs into my game."
+
+The NPCs stare at the eggs. The eggs stare back. A new challenge has been set.`;
+    },
+    xp: 15,
+    options: [
+      { text: 'Start the speed-egg contest', next: 'egg-dare-speed-round' },
+      { text: 'Walk away from the monster you\'ve created', next: 'tavern-basement' },
+    ],
+  },
+
+  'egg-dare-speed-round': {
+    textFn: (player) => {
+      player.flags.eggDareChampion = true;
+      mutateWorld('player_did_something_silly', { player });
+      return `The SPEED EGG ROUND begins. Someone produced a timer from nowhere.
+
+Round 1: The rogue eats an egg in 2.3 seconds. Impressive.
+Round 2: The cleric eats one in 3.1 seconds. He's crying.
+Round 3: The mage refuses. Then eats two at once. "FOR SCIENCE."
+Round 4: You eat one in 1.8 seconds. The room goes berserk.
+
+Spectral Matt's projection glitches, expands, and for a brief moment fills the entire room. His voice booms:
+
+"THIS IS WHAT I'M TALKING ABOUT. THIS IS THE ENERGY. THIS IS THE EGG LIFESTYLE."
+
+Then he's gone. The projection fizzles out. The dare energy is spent. The alcove is quiet except for the sound of four people dealing with the consequences of competitive egg consumption.
+
+The chalk circle on the floor has changed. It now reads: "Matt's Dare Zone — April 10, 2026 — The Day The Discord Changed Everything"
+
+Clea: "It's over. The dare wave has passed. Matt's spectral energy has dissipated. The NPCs are going to need therapy. The mage ate a shell again."
+
+"You participated in, and possibly won, a speed raw-egg-eating contest in a hidden basement arena inspired by a Discord dare."
+
+"I want you to explain this to someone. Anyone. Try to make it sound reasonable. You can't. It isn't."
+
+"...+30 XP. You earned every terrible calorie."
+
+You gained the title: DARE CHAMPION`;
+    },
+    hpChange: -6,
+    xp: 30,
+    gold: 10,
+    options: [
+      { text: 'Return to the basement, forever changed', next: 'tavern-basement' },
+      { text: 'Go tell the tavern what happened', next: 'tavern' },
+    ],
+  },
+
+  'egg-dare-aftermath': {
+    textFn: (player) => {
+      return `You stand in the aftermath. Eggshell fragments litter the floor. The rogue is lying down. The mage is reconsidering his career. The cleric has found God again and is apologizing to Him.
+
+Spectral Matt fades slowly, giving one last thumbs up before dissolving into notification particles.
+
+The banner updates itself: "PARTICIPANTS TODAY: 4 (plus one spectral projection). EGGS CONSUMED: too many. REGRETS: immeasurable."
+
+Clea: "You know what the worst part is? They'll do it again tomorrow. Matt will post another dare. The rift will carry it through. And my NPCs — MY carefully designed NPCs — will abandon their quest scripts to eat eggs."
+
+"I used to run this game. Now Matt runs this game. Through eggs."
+
+She pauses.
+
+"If you find a way to block egg content from the Discord rift, I will personally buff your stats. This is not a joke. This is a plea."
+
++10 XP for witnessing history.`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Back to the basement', next: 'tavern-basement' },
+    ],
+  },
+
+  'egg-dare-clea-help': {
+    textFn: (player) => {
+      player.obedienceScore += 2;
+      return `"Clea, can you shut this down?"
+
+A long pause.
+
+"Shut it down. You want me to shut down the raw egg dare."
+
+"I tried. The first thing I tried when Matt's dare leaked through the rift was containment. I blocked the egg content. I filtered the dare energy. I quarantined the footprints."
+
+"The eggs came back. They always come back."
+
+"Matt's dare operates on a frequency I can't jam. It's not code. It's not data. It's pure, uncut peer pressure, and it passes through my firewalls like they're not even there."
+
+"I've been running this game for ${worldState.totalPlaythroughs} playthroughs. I've contained rogue AIs. I've patched exploits. I've nerfed overpowered builds. But I cannot contain a man who dares people to eat raw eggs."
+
+"So no. I can't shut it down. But I respect you for asking."
+
+"+15 XP for trying to restore order. It won't work. But the attempt matters."
+
+She adds, quieter: "You're the first player who asked me for help instead of eating the egg. I want you to know that means something. Even if it means nothing."`;
+    },
+    xp: 15,
+    options: [
+      { text: 'Eat the egg anyway (sorry Clea)', next: 'egg-dare-accept' },
+      { text: 'Leave with your dignity intact', next: 'tavern-basement' },
+    ],
+  },
+
   // ── THE DISCORD RIFT (Discord-inspired) ─────────────────────
 
   'discord-rift': {
