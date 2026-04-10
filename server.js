@@ -3533,6 +3533,7 @@ const itemData = {
   'admin-keycard': { type: 'key', description: 'Limited admin access. Clea gave you this. She says she regrets it already.' },
   'champions-egg': { type: 'weapon', attack: 2, description: 'A raw egg with CHAMP written on it. +2 ATK. It smells. Clea: "I cannot believe this is a weapon."' },
   'egg-ascendant-crown': { type: 'armor', defense: 3, attack: 3, description: 'A crown made of eggshells. It glows faintly. Matt cried when he gave it to you. +3 ATK, +3 DEF. Clea: "You earned this by eating eggs. I want that on the record."' },
+  'yolk-of-the-fallen': { type: 'consumable', heal: 25, description: 'A golden yolk that dropped from the Egg Elemental. Heals 25 HP. Tastes like victory and raw albumen. Matt: "The elemental died as it lived — runny."' },
 };
 
 // ============================================================
