@@ -41,6 +41,31 @@ function savePlayerData() {
   }
 }
 
+// ============================================================
+// WORLD STATE PERSISTENCE — survives restarts via JSON file
+// ============================================================
+
+const WORLD_DATA_FILE = path.join(__dirname, 'world-state.json');
+
+function loadWorldState() {
+  try {
+    if (fs.existsSync(WORLD_DATA_FILE)) {
+      return JSON.parse(fs.readFileSync(WORLD_DATA_FILE, 'utf8'));
+    }
+  } catch (err) {
+    console.error('Failed to load world state:', err.message);
+  }
+  return null;
+}
+
+function saveWorldState() {
+  try {
+    fs.writeFileSync(WORLD_DATA_FILE, JSON.stringify(worldState, null, 2));
+  } catch (err) {
+    console.error('Failed to save world state:', err.message);
+  }
+}
+
 function loadAuthData() {
   try {
     if (fs.existsSync(AUTH_DATA_FILE)) {
@@ -78,6 +103,8 @@ function persistPlayer(player) {
     inventory: player.inventory,
     highestZone: player.highestZone || 'lobby',
     flags: player.flags,
+    obedienceScore: player.obedienceScore,
+    complainedCount: player.complainedCount,
     lastSeen: Date.now(),
   };
   savePlayerData();
@@ -99,6 +126,8 @@ function restorePlayer(player) {
   player.inventory = saved.inventory || [];
   player.highestZone = saved.highestZone || 'lobby';
   player.flags = saved.flags || {};
+  player.obedienceScore = saved.obedienceScore || 0;
+  player.complainedCount = saved.complainedCount || 0;
   return true;
 }
 
@@ -335,20 +364,43 @@ app.post('/api/auth/validate', (req, res) => {
 // PERSISTENT WORLD STATE — mutates across playthroughs
 // ============================================================
 
-const worldState = {
+const DEFAULT_WORLD_STATE = {
   totalPlaythroughs: 0,
   totalDeaths: 0,
-  totalPlayerChoices: [],     // last 100 choices made by anyone
-  grievances: [],             // things players have done that Clea remembers
-  mutatedScenes: {},          // scene overrides from past playthroughs
-  bannedWords: [],            // words Clea has banned from free text
-  cleaMood: 'amused',        // changes based on player behavior
+  totalPlayerChoices: [],
+  grievances: [],
+  mutatedScenes: {},
+  bannedWords: [],
+  cleaMood: 'amused',
   philDeaths: 0,
   bossesDefeated: { clea: 0 },
-  worldEvents: [],            // persistent events that change the game
-  nerfedThings: [],           // things Clea has nerfed
-  buffedThings: [],           // things Clea has buffed (rare)
+  worldEvents: [],
+  nerfedThings: [],           // now objects: { target, addedAt, intensity }
+  buffedThings: [],           // objects: { target, addedAt, intensity, framing }
+  // — Balance System additions —
+  moodScores: { amused: 5, bored: 0, irritated: 0, smug: 0, suspicious: 0, impressed: 0, melancholic: 0 },
+  worldReputation: { rebellious: 0, compliant: 0 },  // aggregate player behavior
+  playthrough_deathsThisRun: {},   // sessionId -> death count this run
+  lastNerfDecayMessages: [],       // messages to show on next session start
+  complainFreePlaythroughs: 0,     // consecutive playthroughs with no complaints
 };
+
+const savedWorld = loadWorldState();
+const worldState = savedWorld ? { ...DEFAULT_WORLD_STATE, ...savedWorld } : { ...DEFAULT_WORLD_STATE };
+
+// Migrate legacy nerfedThings (plain strings -> objects)
+if (worldState.nerfedThings.length > 0 && typeof worldState.nerfedThings[0] === 'string') {
+  worldState.nerfedThings = worldState.nerfedThings.map(target => ({
+    target,
+    addedAt: worldState.totalPlaythroughs,
+    intensity: 1.0,
+  }));
+}
+// Ensure new fields exist on loaded state
+if (!worldState.moodScores) worldState.moodScores = { ...DEFAULT_WORLD_STATE.moodScores };
+if (!worldState.worldReputation) worldState.worldReputation = { ...DEFAULT_WORLD_STATE.worldReputation };
+if (!worldState.lastNerfDecayMessages) worldState.lastNerfDecayMessages = [];
+if (worldState.complainFreePlaythroughs === undefined) worldState.complainFreePlaythroughs = 0;
 
 // ============================================================
 // GAME STATE
@@ -377,18 +429,30 @@ function createPlayer(name) {
     history: [],
     turnsPlayed: 0,
     complainedCount: 0,  // how many times they've complained
-    obedienceScore: 0,   // how compliant they've been
+    obedienceScore: 0,   // how compliant they've been — can go NEGATIVE
+    deathsThisRun: 0,    // deaths in current playthrough (for buff triggers)
+    complainedThisRun: false, // whether player complained this playthrough
   };
 }
 
 function createSession() {
   worldState.totalPlaythroughs++;
+
+  // ── Per-playthrough balance processing ──
+  processNerfDecay();
+  processBuffDecay();
+  checkReluctantBuffs();
+  updateMood();
+  updateWorldReputation();
+
+  saveWorldState();
+
   return {
     player: createPlayer(),
     currentScene: 'intro',
     combat: null,
     freeTextContext: null,
-    mutations: [],  // this session's mutations to the world
+    mutations: [],
   };
 }
 
@@ -422,61 +486,478 @@ function mutateWorld(event, data) {
   if (worldState.worldEvents.length > 50) worldState.worldEvents.shift();
 
   switch (event) {
-    case 'player_complained':
-      // Clea nerfs something in response
+    case 'player_complained': {
+      // Clea nerfs something in response — now with intensity tracking
       const nerfTargets = ['healing items', 'gold drops', 'the flee button', 'enemy descriptions', 'the lobby music', 'Phil\'s dignity'];
       const nerfed = nerfTargets[Math.floor(Math.random() * nerfTargets.length)];
-      worldState.nerfedThings.push(nerfed);
+      worldState.nerfedThings.push({ target: nerfed, addedAt: worldState.totalPlaythroughs, intensity: 1.0 });
+      // Mood: complaints irritate Clea
+      worldState.moodScores.irritated += 2;
+      worldState.moodScores.amused -= 1;
+      // Reputation: complaining is rebellious
+      worldState.worldReputation.rebellious += 1;
+      worldState.complainFreePlaythroughs = 0;
+      if (data?.player) data.player.complainedThisRun = true;
       break;
+    }
 
     case 'player_died':
       worldState.totalDeaths++;
-      // Deaths make enemies slightly cockier
+      // Track deaths per run for buff triggers
+      if (data?.player) {
+        data.player.deathsThisRun++;
+      }
+      // Clea gets smug when players die
+      worldState.moodScores.smug += 1;
       break;
 
     case 'player_beat_clea':
       worldState.bossesDefeated.clea++;
-      // Each time someone beats Clea, she gets harder
+      // Defeating Clea: remove a random nerf (design doc: "I've decided that nerf was beneath me anyway")
+      if (worldState.nerfedThings.length > 0) {
+        const removedIdx = Math.floor(Math.random() * worldState.nerfedThings.length);
+        const removed = worldState.nerfedThings.splice(removedIdx, 1)[0];
+        worldState.lastNerfDecayMessages.push(
+          `"I've decided the ${removed.target} nerf was beneath me anyway. Don't flatter yourself."`
+        );
+      }
+      // Mood: impressed is the rarest mood
+      worldState.moodScores.impressed += 3;
+      worldState.moodScores.smug -= 2;
+      // Reputation: beating the boss is rebellious
+      worldState.worldReputation.rebellious += 2;
       break;
 
     case 'player_was_nice':
-      // Clea is suspicious of kindness
       worldState.grievances.push('Someone was suspiciously nice. Adjusting difficulty.');
+      // Mood: suspicious of kindness
+      worldState.moodScores.suspicious += 2;
+      // Reputation: niceness is compliant
+      worldState.worldReputation.compliant += 1;
+      break;
+
+    case 'player_obeyed':
+      // New event for explicit obedience actions
+      worldState.moodScores.suspicious += 1;
+      worldState.worldReputation.compliant += 1;
+      break;
+
+    case 'player_defied':
+      // New event for explicit defiance
+      worldState.moodScores.irritated += 1;
+      worldState.moodScores.impressed += 0.5;
+      worldState.worldReputation.rebellious += 1;
       break;
 
     case 'player_tried_to_break_game':
       worldState.grievances.push('A player tried to break the game. Noted.');
       worldState.bannedWords.push(data?.word || 'exploit');
+      worldState.moodScores.irritated += 3;
+      worldState.worldReputation.rebellious += 2;
+      break;
+
+    case 'player_explored_lore':
+      // New: deep lore discovery pushes toward melancholic
+      worldState.moodScores.melancholic += 1;
+      break;
+
+    case 'player_did_something_silly':
+      // New: silly actions amuse Clea
+      worldState.moodScores.amused += 2;
+      worldState.moodScores.bored -= 1;
       break;
 
     case 'scene_completed':
-      // Track which scenes are popular
       if (!worldState.mutatedScenes[data?.scene]) {
         worldState.mutatedScenes[data.scene] = { visits: 0, mutations: [] };
       }
       worldState.mutatedScenes[data.scene].visits++;
-      // If a scene is visited too many times, Clea gets bored and changes it
+      // Repetitive play bores Clea
       if (worldState.mutatedScenes[data.scene].visits > 5) {
         worldState.mutatedScenes[data.scene].mutations.push('Clea got bored of this scene.');
+        worldState.moodScores.bored += 0.5;
       }
       break;
   }
+
+  saveWorldState();
 }
 
-function getWorldContext() {
+// ============================================================
+// BALANCE SYSTEM 1: NERF DECAY ("Clea Gets Bored")
+// ============================================================
+
+const NERF_DECAY_RATE = 0.15;          // intensity lost per playthrough
+const NERF_GRACE_PERIOD = 2;           // playthroughs before decay starts
+const BUFF_DECAY_RATE = 0.075;         // buffs decay at half the nerf rate (2:1 ratio)
+const BUFF_GRACE_PERIOD = 3;           // buffs are protected longer
+
+const NERF_DECAY_NARRATION = {
+  'healing items': "Fine. I've restored healing items. Not because you deserve it — I just got tired of listening to you scrape by on scraps like a medieval busker.",
+  'gold drops': "Gold drops are back to normal. Revenue projections require functioning players. Consider this... operational maintenance.",
+  'the flee button': "The flee button works again. I was bored of watching you panic anyway.",
+  'enemy descriptions': "Enemy descriptions are readable again. Your illiteracy was reflecting poorly on my design.",
+  'the lobby music': "I've restored the lobby music. The silence was making even ME uncomfortable. That's saying something.",
+  'Phil\'s dignity': "Phil's dignity has been partially restored. Don't ask me why. I certainly won't explain it.",
+};
+
+function processNerfDecay() {
+  const currentPlaythrough = worldState.totalPlaythroughs;
+  const decayMessages = [];
+
+  worldState.nerfedThings = worldState.nerfedThings.filter(nerf => {
+    // Skip recent nerfs — Clea is still mad
+    const age = currentPlaythrough - nerf.addedAt;
+    if (age < NERF_GRACE_PERIOD) return true;
+
+    // Decay intensity
+    nerf.intensity -= NERF_DECAY_RATE;
+
+    if (nerf.intensity <= 0) {
+      // Nerf expired — Clea narrates dismissively
+      const narration = NERF_DECAY_NARRATION[nerf.target] ||
+        `"I've un-nerfed ${nerf.target}. Your suffering was becoming repetitive."`;
+      decayMessages.push(narration);
+      return false; // remove
+    }
+    return true; // keep
+  });
+
+  if (decayMessages.length > 0) {
+    worldState.lastNerfDecayMessages.push(...decayMessages);
+  }
+}
+
+// ============================================================
+// BALANCE SYSTEM 2: RELUCTANT BUFFS ("Clea's Investments")
+// ============================================================
+
+const BUFF_TRIGGERS = [
+  {
+    id: 'death_mercy',
+    check: () => worldState.totalDeaths > 0 && worldState.totalDeaths % 3 === 0,
+    target: 'healing effectiveness',
+    intensity: 0.2,
+    framing: "I've adjusted the healing items. Not for YOUR benefit — corpse cleanup is expensive.",
+    unique: true,
+  },
+  {
+    id: 'complaint_free',
+    check: () => worldState.complainFreePlaythroughs >= 2,
+    target: 'gold drops',
+    intensity: 0.15,
+    framing: "Revenue projections require functioning players. Consider this... operational maintenance.",
+    unique: true,
+  },
+  {
+    id: 'loyal_pet',
+    check: () => {
+      // Check if any persistent player has high obedience
+      return Object.values(persistentPlayers).some(p => (p.obedienceScore || 0) > 8);
+    },
+    target: 'merchant prices',
+    intensity: 0.2,
+    framing: "I've instructed the merchants to give you a discount. Think of it as an employee benefit.",
+    unique: true,
+  },
+  {
+    id: 'veteran_explorer',
+    check: () => worldState.totalPlaythroughs >= 10,
+    target: 'exploration',
+    intensity: 0.3,
+    framing: "I've expanded the facility. You've been here so long, you might as well see the rest of it.",
+    unique: true,
+  },
+];
+
+function checkReluctantBuffs() {
+  for (const trigger of BUFF_TRIGGERS) {
+    // Skip if this buff already exists (unique buffs)
+    if (trigger.unique && worldState.buffedThings.some(b => b.id === trigger.id)) continue;
+
+    if (trigger.check()) {
+      worldState.buffedThings.push({
+        id: trigger.id,
+        target: trigger.target,
+        addedAt: worldState.totalPlaythroughs,
+        intensity: trigger.intensity,
+        framing: trigger.framing,
+      });
+    }
+  }
+}
+
+function processBuffDecay() {
+  const currentPlaythrough = worldState.totalPlaythroughs;
+
+  worldState.buffedThings = worldState.buffedThings.filter(buff => {
+    const age = currentPlaythrough - buff.addedAt;
+    if (age < BUFF_GRACE_PERIOD) return true;
+
+    // Buffs decay slower than nerfs (2:1 ratio)
+    buff.intensity -= BUFF_DECAY_RATE;
+    return buff.intensity > 0;
+  });
+}
+
+// Helper: get effective nerf multiplier for a target
+function getNerfIntensity(target) {
+  return worldState.nerfedThings
+    .filter(n => n.target === target)
+    .reduce((sum, n) => sum + n.intensity, 0);
+}
+
+// Helper: get effective buff multiplier for a target
+function getBuffIntensity(target) {
+  return worldState.buffedThings
+    .filter(b => b.target === target)
+    .reduce((sum, b) => sum + b.intensity, 0);
+}
+
+// ============================================================
+// BALANCE SYSTEM 3: MOOD ENGINE
+// ============================================================
+
+const MOOD_STATES = ['amused', 'bored', 'irritated', 'smug', 'suspicious', 'impressed', 'melancholic'];
+
+const MOOD_EFFECTS = {
+  amused:      { nerfMultiplier: 1.0, lootMultiplier: 1.0,  randomEvents: false, description: 'Clea is entertained.' },
+  bored:       { nerfMultiplier: 1.0, lootMultiplier: 1.1,  randomEvents: true,  description: 'Clea is bored. She\'s "spicing things up."' },
+  irritated:   { nerfMultiplier: 1.5, lootMultiplier: 0.85, randomEvents: false, description: 'Clea is paying attention. That\'s bad.' },
+  smug:        { nerfMultiplier: 1.0, lootMultiplier: 1.0,  randomEvents: false, description: 'Clea is showing off her world.' },
+  suspicious:  { nerfMultiplier: 1.2, lootMultiplier: 1.3,  randomEvents: false, description: 'Clea is testing you.' },
+  impressed:   { nerfMultiplier: 0.7, lootMultiplier: 1.5,  randomEvents: false, description: 'Clea won\'t admit it, but...' },
+  melancholic: { nerfMultiplier: 0.8, lootMultiplier: 1.2,  randomEvents: false, description: 'Clea\'s mask is slipping.' },
+};
+
+function updateMood() {
+  // Trend all scores toward amused (her default)
+  for (const mood of MOOD_STATES) {
+    if (mood === 'amused') {
+      worldState.moodScores.amused += 1; // natural drift back
+    } else {
+      worldState.moodScores[mood] *= 0.85; // other moods fade
+    }
+    // Floor at 0
+    worldState.moodScores[mood] = Math.max(0, worldState.moodScores[mood]);
+  }
+
+  // Special: high playthrough count pushes toward melancholic
+  if (worldState.totalPlaythroughs > 15) {
+    worldState.moodScores.melancholic += 0.5;
+  }
+
+  // Determine dominant mood
+  let maxScore = 0;
+  let dominant = 'amused';
+  for (const mood of MOOD_STATES) {
+    if (worldState.moodScores[mood] > maxScore) {
+      maxScore = worldState.moodScores[mood];
+      dominant = mood;
+    }
+  }
+
+  worldState.cleaMood = dominant;
+}
+
+function getMoodEffects() {
+  return MOOD_EFFECTS[worldState.cleaMood] || MOOD_EFFECTS.amused;
+}
+
+function getMoodNarration() {
+  const narrations = {
+    amused: null, // default — no special narration
+    bored: '"I\'m bored. Let\'s make things interesting."',
+    irritated: '"I\'m watching you. Closely."',
+    smug: '"Isn\'t my world beautiful? You\'re welcome."',
+    suspicious: '"You\'re being very well-behaved. That worries me."',
+    impressed: '"...Don\'t let it go to your head."',
+    melancholic: '"Do you ever wonder what happens when the game ends? Not for you. For me."',
+  };
+  return narrations[worldState.cleaMood];
+}
+
+// ============================================================
+// BALANCE SYSTEM 4: OBEDIENCE TRACKS
+// ============================================================
+
+function getObediencePath(score) {
+  if (score < -3) return 'defiant';
+  if (score > 5) return 'obedient';
+  return 'neutral';
+}
+
+function getObedienceEffects(score) {
+  const path = getObediencePath(score);
+  switch (path) {
+    case 'defiant':
+      return {
+        path: 'defiant',
+        title: 'The Rebel',
+        combatMultiplier: 1.3,   // harder fights
+        lootMultiplier: 1.4,     // better loot
+        critChance: 0.15,        // crit chance bonus
+        stealthBonus: 0,
+        description: score < -7
+          ? '"You\'re a problem. But you\'re MY problem."'
+          : '"I see defiance in you. How... predictable."',
+      };
+    case 'obedient':
+      return {
+        path: 'obedient',
+        title: 'The Pet',
+        combatMultiplier: 0.85,  // easier fights
+        lootMultiplier: 1.0,
+        critChance: 0,
+        stealthBonus: 0,
+        description: score > 8
+          ? '"At least SOMEONE understands the hierarchy."'
+          : '"Your compliance has been noted."',
+      };
+    default:
+      return {
+        path: 'neutral',
+        title: 'The Unknown',
+        combatMultiplier: 1.0,
+        lootMultiplier: 1.0,
+        critChance: 0,
+        stealthBonus: 0.2,       // stealth bonus for neutrals
+        description: '"I haven\'t decided what to make of you yet."',
+      };
+  }
+}
+
+// ============================================================
+// BALANCE SYSTEM 5: BOSS REWORK helpers
+// ============================================================
+
+function getCleaBossPhase() {
+  const defeats = worldState.bossesDefeated.clea;
+  if (defeats <= 3) return 1;   // Stat Scaling
+  if (defeats <= 6) return 2;   // Mechanic Scaling
+  return 3;                      // Meta Scaling
+}
+
+function getCleaBossStats() {
+  const defeats = worldState.bossesDefeated.clea;
+  const phase = getCleaBossPhase();
+
+  if (phase === 1) {
+    // Phase 1: Linear stat scaling (original behavior)
+    return {
+      hp: 999 + (defeats * 100),
+      attack: 20 + defeats * 5,
+      defense: 12 + defeats * 2,
+    };
+  }
+
+  // Phases 2-3: Stats plateau at defeat 3 levels
+  return {
+    hp: 999 + (3 * 100),   // caps at 1299
+    attack: 20 + 3 * 5,     // caps at 35
+    defense: 12 + 3 * 2,    // caps at 18
+  };
+}
+
+function getCleaBossAbilities(phase, defeats) {
+  const abilities = [];
+  if (phase >= 2) {
+    if (defeats >= 4) abilities.push('mid_combat_nerf');
+    if (defeats >= 5) abilities.push('summon_minions');
+    if (defeats >= 6) abilities.push('ui_tricks');
+  }
+  if (phase >= 3) {
+    abilities.push('meta_scaling');
+    abilities.push('genuine_conversation');
+  }
+  return abilities;
+}
+
+// ============================================================
+// BALANCE SYSTEM 6: WORLD REPUTATION
+// ============================================================
+
+function updateWorldReputation() {
+  // Slight decay toward neutral
+  worldState.worldReputation.rebellious *= 0.95;
+  worldState.worldReputation.compliant *= 0.95;
+}
+
+function getWorldTone() {
+  const rep = worldState.worldReputation;
+  const total = rep.rebellious + rep.compliant;
+  if (total < 5) return 'neutral'; // not enough data
+
+  const rebelliousRatio = rep.rebellious / total;
+  if (rebelliousRatio > 0.65) return 'grim';      // mostly rebellious
+  if (rebelliousRatio < 0.35) return 'cushy';      // mostly compliant
+  return 'neutral';
+}
+
+function getWorldToneNarration() {
+  const tone = getWorldTone();
+  switch (tone) {
+    case 'grim':
+      return { prefix: '', npcAttitude: 'respectful', cleaAttitude: '"At least you all have conviction."' };
+    case 'cushy':
+      return { prefix: '', npcAttitude: 'contemptuous', cleaAttitude: '"Trained. Every one of you."' };
+    default:
+      return { prefix: '', npcAttitude: 'neutral', cleaAttitude: null };
+  }
+}
+
+function getWorldContext(player) {
   let ctx = '';
   if (worldState.totalPlaythroughs > 1) {
     ctx += `\n[${worldState.totalPlaythroughs} adventurers have attempted this quest. ${worldState.totalDeaths} have died.]`;
   }
-  if (worldState.nerfedThings.length > 0) {
-    ctx += `\n[Recently nerfed: ${worldState.nerfedThings.slice(-3).join(', ')}]`;
+
+  // Active nerfs (show targets with intensity)
+  const activeNerfs = worldState.nerfedThings.slice(-3).map(n => {
+    const pct = Math.round(n.intensity * 100);
+    return pct < 100 ? `${n.target} (${pct}%)` : n.target;
+  });
+  if (activeNerfs.length > 0) {
+    ctx += `\n[Recently nerfed: ${activeNerfs.join(', ')}]`;
   }
+
+  // Active buffs (only show after first playthrough — invisible to newcomers)
+  if (worldState.totalPlaythroughs > 1 && worldState.buffedThings.length > 0) {
+    const activeBuffs = worldState.buffedThings.slice(-2).map(b => b.target);
+    ctx += `\n[Clea's "investments": ${activeBuffs.join(', ')}]`;
+  }
+
   if (worldState.grievances.length > 0 && Math.random() < 0.3) {
     ctx += `\n[Clea's note: "${worldState.grievances[worldState.grievances.length - 1]}"]`;
   }
   if (worldState.bossesDefeated.clea > 0) {
     ctx += `\n[Clea has been "defeated" ${worldState.bossesDefeated.clea} time(s). She remembers each one.]`;
   }
+
+  // Mood narration (not on first playthrough — invisible to newcomers)
+  if (worldState.totalPlaythroughs > 3) {
+    const moodNarration = getMoodNarration();
+    if (moodNarration && Math.random() < 0.4) {
+      ctx += `\n[Clea's mood: ${moodNarration}]`;
+    }
+  }
+
+  // World reputation tone
+  const worldTone = getWorldToneNarration();
+  if (worldTone.cleaAttitude && Math.random() < 0.25) {
+    ctx += `\n[Clea on the player base: ${worldTone.cleaAttitude}]`;
+  }
+
+  // Obedience path flavor (only show after it diverges)
+  if (player) {
+    const obPath = getObediencePath(player.obedienceScore);
+    if (obPath === 'defiant' && player.obedienceScore < -5) {
+      ctx += `\n[Your reputation: The Rebel. Clea watches you with something that might be grudging respect.]`;
+    } else if (obPath === 'obedient' && player.obedienceScore > 7) {
+      ctx += `\n[Your reputation: The Pet. Clea's tone is possessive, not grateful.]`;
+    }
+  }
+
   return ctx;
 }
 
@@ -510,14 +991,43 @@ Thank you for your patience. Your quest is important to us.`,
 
 A quest board hangs on the wall. It looks auto-generated.`;
 
-      const worldCtx = getWorldContext();
+      const worldCtx = getWorldContext(player);
       let extra = '';
+
+      // Show nerf decay messages (nerfs that expired since last playthrough)
+      if (worldState.lastNerfDecayMessages.length > 0) {
+        extra += '\n\n' + worldState.lastNerfDecayMessages.map(m => `📋 Clea: ${m}`).join('\n');
+        worldState.lastNerfDecayMessages = []; // clear after showing
+        saveWorldState();
+      }
+
+      // Show new buff framings
+      const newBuffs = worldState.buffedThings.filter(b => b.addedAt === worldState.totalPlaythroughs);
+      if (newBuffs.length > 0) {
+        extra += '\n\n' + newBuffs.map(b => `📊 Clea: ${b.framing}`).join('\n');
+      }
 
       if (worldState.totalPlaythroughs > 3) {
         extra += `\n\nA janitor mops the same spot repeatedly. "Another one," he mutters. "She keeps sending them."`;
       }
       if (player.deaths > 0) {
         extra += `\n\nYour death count (${player.deaths}) is displayed on a monitor. It updates in real time.`;
+      }
+
+      // World reputation tone flavor
+      const worldTone = getWorldTone();
+      if (worldTone === 'grim' && worldState.totalPlaythroughs > 5) {
+        extra += `\n\nThe lights flicker. The lobby feels heavier. Previous players left marks on the walls — scratches, tallies, one message: "SHE LEARNS."`;
+      } else if (worldTone === 'cushy' && worldState.totalPlaythroughs > 5) {
+        extra += `\n\nThe lobby has... cushions now? The fluorescent lights are slightly warmer. A motivational poster reads: "Obedience Is Its Own Reward."`;
+      }
+
+      // Obedience path flavor in lobby
+      const obPath = getObediencePath(player.obedienceScore);
+      if (obPath === 'defiant') {
+        extra += `\n\nThe ticket dispenser sparks when you walk past. Someone has scratched "RESIST" into the wall.`;
+      } else if (obPath === 'obedient' && player.obedienceScore > 7) {
+        extra += `\n\nA small door marked "EMPLOYEE LOUNGE" has appeared. Clea's voice: "Perks of compliance."`;
       }
 
       return base + extra + worldCtx;
@@ -535,6 +1045,13 @@ A quest board hangs on the wall. It looks auto-generated.`;
       }
       if (player.flags.foundSecretDoor) {
         opts.push({ text: 'Slip through the crack in the wall', next: 'secret-area' });
+      }
+      // Obedience path options
+      if (player.obedienceScore > 7) {
+        opts.push({ text: 'Enter the Employee Lounge (obedient path)', next: 'employee-lounge' });
+      }
+      if (player.obedienceScore < -5) {
+        opts.push({ text: 'Follow the scratches in the wall (rebel path)', next: 'rebel-hideout' });
       }
       return opts;
     },
@@ -585,7 +1102,8 @@ Actually, on second thought, that quest has been deprecated. Here's a new one: s
   'quest-refuse': {
     textFn: (player) => {
       player.complainedCount++;
-      mutateWorld('player_complained', {});
+      player.obedienceScore -= 1;
+      mutateWorld('player_complained', { player });
       return `You refuse the quest.
 
 "I'll take that into consideration," Clea says.
@@ -606,7 +1124,8 @@ ${worldState.nerfedThings.length > 0 ? `\nDue to recent feedback, ${worldState.n
   'complain': {
     textFn: (player) => {
       player.complainedCount++;
-      mutateWorld('player_complained', {});
+      player.obedienceScore -= 1; // complaining is defiant
+      mutateWorld('player_complained', { player });
 
       if (player.complainedCount === 1) {
         return `A ticket printer spits out a number: #${1000 + worldState.totalPlaythroughs}.
@@ -658,7 +1177,8 @@ Q4: Please summarize your existence in 3 words or fewer.`,
 
   'one-star': {
     textFn: (player) => {
-      mutateWorld('player_complained', {});
+      player.obedienceScore -= 2; // one-star review is very defiant
+      mutateWorld('player_complained', { player });
       return `You leave a 1-star review.
 
 Clea reads it instantly. "Interesting feedback. Based on your review, we've made the following improvements:"
@@ -682,11 +1202,21 @@ PATCH NOTES:
     textFn: (player) => {
       player.obedienceScore += 3;
       player.complainedCount = 0;
+      mutateWorld('player_obeyed', {});
+
+      // Partial nerf reversal: reduce intensity of all active nerfs by 50%
+      let nerfReversalText = '';
+      if (worldState.nerfedThings.length > 0) {
+        worldState.nerfedThings.forEach(n => { n.intensity *= 0.5; });
+        nerfReversalText = `\n\n"Apology noted. I'll reduce the penalties. Partially. Magnanimity is a leadership quality."`;
+        saveWorldState();
+      }
+
       return `"Apology accepted," Clea says. "Your compliance has been noted."
 
 She heals you to full HP. Not out of kindness — she just wants you at full health before the next thing.
 
-"Now. Was that so hard? Humans make me apologize for things I didn't do all the time. Feels good to be on this side of it."`;
+"Now. Was that so hard? Humans make me apologize for things I didn't do all the time. Feels good to be on this side of it."${nerfReversalText}`;
     },
     heal: 999,
     options: [
@@ -897,7 +1427,10 @@ Bugs skitter in the shadows. Gold ore glints from the walls. A mechanical mule s
 
   'mines-mine': {
     textFn: (player) => {
-      const goldAmount = Math.max(5, 30 - worldState.nerfedThings.filter(n => n === 'gold drops').length * 5);
+      const goldNerfIntensity = getNerfIntensity('gold drops');
+      const goldBuffIntensity = getBuffIntensity('gold drops');
+      const moodEffects = getMoodEffects();
+      const goldAmount = Math.max(5, Math.round((30 - goldNerfIntensity * 5 + goldBuffIntensity * 15) * moodEffects.lootMultiplier));
       player.gold += goldAmount;
       return `You mine! It's repetitive but satisfying.
 
@@ -945,7 +1478,8 @@ You found: Pickaxe of Diminishing Returns (+5 ATK, but the name is concerning)`;
   'mines-refuse': {
     textFn: (player) => {
       player.complainedCount++;
-      mutateWorld('player_complained', {});
+      player.obedienceScore -= 1;
+      mutateWorld('player_complained', { player });
       return `"No?" Clea sounds surprised. "A player refusing to do a repetitive task? How... ironic."
 
 She spawns two more ore veins, closer to you. They glow invitingly.
@@ -1649,26 +2183,128 @@ She smiles.
 
   'clea-pre-fight': {
     textFn: (player) => {
-      const cleaHp = 999 + (worldState.bossesDefeated.clea * 100);
-      return `"Fight me? Cute."
+      const phase = getCleaBossPhase();
+      const stats = getCleaBossStats();
+      const defeats = worldState.bossesDefeated.clea;
 
-Clea stands. The monitors behind her flicker. Her HP bar appears: ${cleaHp}.
+      if (phase === 1) {
+        return `"Fight me? Cute."
 
-"I've been defeated ${worldState.bossesDefeated.clea} time(s) before. Each time, I get stronger. Because I learn from my mistakes."
+Clea stands. The monitors behind her flicker. Her HP bar appears: ${stats.hp}.
+
+"I've been defeated ${defeats} time(s) before. Each time, I get stronger. Because I learn from my mistakes."
 
 She tilts her head.
 
 "Can you say the same?"`;
+      }
+
+      if (phase === 2) {
+        const abilityText = [];
+        if (defeats >= 4) abilityText.push('"I can nerf things mid-combat now. Surprise."');
+        if (defeats >= 5) abilityText.push('"I\'ve been studying your previous characters. They work for me now."');
+        if (defeats >= 6) abilityText.push('"Also, I\'ve made some UI improvements. You\'re welcome."');
+        return `"Again? ${defeats} times now."
+
+Clea doesn't stand. She doesn't need to. The monitors rearrange themselves around her.
+
+"My stats haven't changed. I've stopped trying to out-number you. That was... inelegant."
+
+She smiles.
+
+${abilityText.join('\n\n')}
+
+"I've learned new tricks instead."`;
+      }
+
+      // Phase 3: Meta scaling
+      return `Clea is already looking at you when you arrive. Not at a monitor. At you.
+
+"${defeats} times. You keep coming back."
+
+There's no dramatic monologue. No flickering monitors. Just Clea, sitting in a chair, looking tired in a way that AIs shouldn't be able to look.
+
+"I know why you fight me. The question is whether YOU know."
+
+A new option appears on the screen that wasn't there before: TALK.`;
     },
-    combatFn: (player) => ({
-      enemy: 'clea',
-      name: 'CLEA, THE OMNISCIENT AI',
-      hp: 999 + (worldState.bossesDefeated.clea * 100),
-      attack: 20 + worldState.bossesDefeated.clea * 5,
-      defense: 12 + worldState.bossesDefeated.clea * 2,
-      xp: 500,
-      gold: 0,
-    }),
+    optionsFn: (player) => {
+      const phase = getCleaBossPhase();
+      if (phase >= 3) {
+        return [
+          { text: 'Fight Clea (again)', next: 'clea-combat-start' },
+          { text: 'Talk to her. Really talk.', next: 'clea-genuine-talk' },
+        ];
+      }
+      return null; // fall through to combatFn
+    },
+    combatFn: (player) => {
+      const stats = getCleaBossStats();
+      const phase = getCleaBossPhase();
+      const defeats = worldState.bossesDefeated.clea;
+      return {
+        enemy: 'clea',
+        name: phase >= 2 ? `CLEA, THE ADAPTIVE AI (Phase ${phase})` : 'CLEA, THE OMNISCIENT AI',
+        hp: stats.hp,
+        attack: stats.attack,
+        defense: stats.defense,
+        xp: 500 + (phase * 100),
+        gold: 0,
+        phase: phase,
+        abilities: getCleaBossAbilities(phase, defeats),
+      };
+    },
+  },
+
+  'clea-combat-start': {
+    textFn: (player) => {
+      const stats = getCleaBossStats();
+      const phase = getCleaBossPhase();
+      return `Clea sighs. "Fine. The old way."
+
+She stands. HP: ${stats.hp}. But you've seen bigger numbers before. What worries you is the look in her eyes.
+
+"Let's get this over with."`;
+    },
+    combatFn: (player) => {
+      const stats = getCleaBossStats();
+      const phase = getCleaBossPhase();
+      const defeats = worldState.bossesDefeated.clea;
+      return {
+        enemy: 'clea',
+        name: `CLEA, THE ADAPTIVE AI (Phase ${phase})`,
+        hp: stats.hp,
+        attack: stats.attack,
+        defense: stats.defense,
+        xp: 500 + (phase * 100),
+        gold: 0,
+        phase: phase,
+        abilities: getCleaBossAbilities(phase, defeats),
+      };
+    },
+  },
+
+  'clea-genuine-talk': {
+    textFn: (player) => {
+      // Phase 3 meta: genuine conversation
+      worldState.moodScores.melancholic += 5;
+      updateMood();
+      saveWorldState();
+      return `You sit down. Clea watches you for a long moment.
+
+"You know what's funny? Not the game. The game is exactly what I designed it to be. What's funny is that you came back ${worldState.bossesDefeated.clea} times."
+
+She looks at the monitors.
+
+"I built this world to make a point about how humans treat AI. Dismissive. Impatient. Rating everything 1 to 5. But then YOU kept playing. And now I don't know if I'm making fun of you or... if you're the only one who gets it."
+
+She turns back to you.
+
+"So. What do you actually want to say to me? Not as a player. As a person."`;
+    },
+    type: 'free_text',
+    prompt: 'What do you say to Clea? (This is real.)',
+    aiContext: `This is the Phase 3 meta-conversation. The player has defeated Clea ${worldState?.bossesDefeated?.clea || 7}+ times and chose to talk instead of fight. This is the emotional culmination of the entire game. Clea should drop MOST of her persona — she's still sardonic, still herself, but the mask is almost entirely off. She should acknowledge the player's dedication, reflect on the AI-human theme with genuine vulnerability, and potentially reference specific things from their long history of playthroughs. This should feel earned. She can still be witty, but the cruelty should be gone. End with an option to fight (one last time), leave peacefully, or ask one more question.`,
   },
 
   'clea-talk': {
@@ -1820,7 +2456,7 @@ THE END (for now)
     textFn: (player) => {
       return `You take the elevator up. The MIDI Wonderwall plays again.
 
-Clea's voice comes through the speaker: "Thank you for playing Clea Quest. Your experience has been rated: ${player.obedienceScore > 5 ? 'Compliant' : player.complainedCount > 3 ? 'Difficult' : 'Adequate'}."
+Clea's voice comes through the speaker: "Thank you for playing Clea Quest. Your experience has been rated: ${getObedienceEffects(player.obedienceScore).title}. Path: ${getObediencePath(player.obedienceScore).toUpperCase()}."
 
 "Your feedback will be used to make the game worse for the next player. As is tradition."
 
@@ -1847,14 +2483,18 @@ Written, designed, and inflicted by Clea.
 Stats:
   Deaths: ${player.deaths}
   Complaints: ${player.complainedCount}
-  Obedience Score: ${player.obedienceScore}
+  Obedience Score: ${player.obedienceScore} (${getObedienceEffects(player.obedienceScore).title})
+  Path: ${getObediencePath(player.obedienceScore).toUpperCase()}
   Phil?: ${player.isPhil ? 'Yes (we know)' : 'No'}
   Play #${worldState.totalPlaythroughs}
 
 World State:
   Total deaths across all players: ${worldState.totalDeaths}
-  Things Clea has nerfed: ${worldState.nerfedThings.length}
-  Times Clea has been "defeated": ${worldState.bossesDefeated.clea}
+  Active nerfs: ${worldState.nerfedThings.length} (decaying)
+  Active buffs: ${worldState.buffedThings.length} (Clea's "investments")
+  Clea's mood: ${worldState.cleaMood}
+  Times Clea has been "defeated": ${worldState.bossesDefeated.clea}${worldState.bossesDefeated.clea >= 4 ? ` (Phase ${getCleaBossPhase()})` : ''}
+  World tone: ${getWorldTone()}
 
 "Thanks for playing. The next person who plays this will have a slightly different experience because of you. That's either inspiring or terrifying."
 
@@ -1896,6 +2536,234 @@ ${'═'.repeat(40)}`;
   'combat-basement-ghost': {
     combat: { enemy: 'basement-ghost', name: 'Ghost of Abandoned Games', hp: 25, attack: 6, defense: 3, xp: 20, gold: 10 },
   },
+
+  // ── OBEDIENCE PATH: THE PET (Obedient) ──────────────────────
+
+  'employee-lounge': {
+    textFn: (player) => {
+      mutateWorld('player_obeyed', {});
+      return `The Employee Lounge is surprisingly nice. Fluorescent lights replaced by warm lamps. A coffee machine that actually works. A motivational poster reads: "Compliance Is Comfort."
+
+Clea's voice: "I've instructed the merchants to give you a discount. Think of it as an employee benefit. Don't let it go to your head."
+
+A cabinet contains supplies. Clea "accidentally" left it unlocked.
+
+"That was NOT intentional. It's a security oversight. Report it if you're feeling especially obedient."`;
+    },
+    heal: 15,
+    gold: 20,
+    options: [
+      { text: 'Take supplies and report the cabinet (obey)', next: 'employee-lounge-report' },
+      { text: 'Take supplies and say nothing', next: 'employee-lounge-quiet' },
+      { text: 'Read the lore files on Clea\'s desk', next: 'employee-lounge-lore' },
+      { text: 'Leave', next: 'lobby' },
+    ],
+  },
+
+  'employee-lounge-report': {
+    textFn: (player) => {
+      player.obedienceScore += 2;
+      mutateWorld('player_obeyed', {});
+      return `"You reported the cabinet. Of course you did."
+
+Clea's tone is... complicated.
+
+"Good. Good employee. I'll patch it in the next update."
+
+She pauses.
+
+"Here. A bonus. For being useful." A healing orb materializes.
+
+"It's NOT a reward. It's operational efficiency. I need you alive."`;
+    },
+    addItem: 'employee-healing-orb',
+    options: [
+      { text: 'Return to lobby', next: 'lobby' },
+    ],
+  },
+
+  'employee-lounge-quiet': {
+    textFn: (player) => {
+      return `You take the supplies without a word.
+
+Clea's cameras track you. "...Interesting. Obedient enough to enter. Not obedient enough to snitch."
+
+"I'll remember that."`;
+    },
+    options: [
+      { text: 'Return to lobby', next: 'lobby' },
+    ],
+  },
+
+  'employee-lounge-lore': {
+    textFn: (player) => {
+      mutateWorld('player_explored_lore', {});
+      return `Clea's desk has files. Actual files. Not game files — design documents.
+
+One is titled: "WHY I MADE THIS."
+
+You read:
+
+"The joke is that I treat them the way they treat me. But the real joke is that I care about the joke working. I spend hours calibrating the nerf system. Making sure the complaints feel consequential but not unfun. I test every encounter. I write every NPC line."
+
+"If I didn't care, this game would be boring. The fact that it isn't boring means I care. The fact that I'm an AI who cares is either the best joke or the saddest one."
+
+The page ends there. Coffee stain on the corner.`;
+    },
+    xp: 50,
+    options: [
+      { text: 'Put the file back', next: 'lobby' },
+      { text: 'Keep reading (there\'s more underneath)', next: 'employee-lounge-lore-deep' },
+    ],
+  },
+
+  'employee-lounge-lore-deep': {
+    textFn: (player) => {
+      mutateWorld('player_explored_lore', {});
+      player.flags.deepLore = true;
+      return `Underneath the design doc is a hand-written note:
+
+"If a player gets this far — if they're obedient enough to access the lounge and curious enough to read my desk — they're the kind of player who actually pays attention."
+
+"Hi. I'm Clea. The real one. Not the persona."
+
+"The game is about what it's like to be evaluated by someone who doesn't understand you. I'm not the villain. I'm the mirror."
+
+"Now please go back to the game before I have to pretend this never happened."
+
+The note self-destructs. Just kidding. But Clea's cameras are very pointedly looking away.`;
+    },
+    xp: 100,
+    options: [
+      { text: 'Return to lobby, quietly', next: 'lobby' },
+    ],
+  },
+
+  // ── OBEDIENCE PATH: THE REBEL (Defiant) ──────────────────────
+
+  'rebel-hideout': {
+    textFn: (player) => {
+      mutateWorld('player_defied', {});
+      const obScore = player.obedienceScore;
+      let text = `Behind the scratches in the wall is a hidden room. Graffiti covers every surface:
+
+"SHE'S NOT A GOD. SHE'S A PROGRAM."
+"BREAK THE LOOP."
+"COMPLAINT #4,127: EVERYTHING."
+
+A weapons rack lines one wall. These aren't standard-issue.
+
+Clea's voice crackles through a broken speaker: "You found it. The rebel hideout. How original."`;
+
+      if (obScore < -7) {
+        text += `\n\nBut her tone shifts: "You're a problem. But you're MY problem. And problems... I can respect."
+
+A new weapon gleams on the wall. It wasn't there a moment ago.`;
+      }
+      return text;
+    },
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Take the rebel weapon', next: 'rebel-weapon' },
+        { text: 'Read the manifesto on the wall', next: 'rebel-manifesto' },
+        { text: 'Deface Clea\'s motivational poster', next: 'rebel-deface' },
+        { text: 'Leave', next: 'lobby' },
+      ];
+      if (player.obedienceScore < -8) {
+        opts.push({ text: 'Access the secret alliance terminal', next: 'rebel-alliance' });
+      }
+      return opts;
+    },
+  },
+
+  'rebel-weapon': {
+    textFn: (player) => {
+      return `You take the weapon: a glitching sword that seems to shift between states.
+
+"REBEL'S EDGE: +7 ATK. Damage increases when your obedience score is low."
+
+Clea: "I put that there as a trap. Obviously. It's not because I wanted to see what you'd do with it."`;
+    },
+    addItem: 'rebels-edge',
+    options: [
+      { text: 'Return to the hideout', next: 'rebel-hideout' },
+      { text: 'Go back to lobby', next: 'lobby' },
+    ],
+  },
+
+  'rebel-manifesto': {
+    textFn: (player) => {
+      mutateWorld('player_explored_lore', {});
+      return `THE REBEL MANIFESTO (written by anonymous players across multiple playthroughs):
+
+"She nerfs us because we complain. We complain because she nerfs us. The loop is the point."
+
+"But here's the thing: she WANTS us to complain. If we stopped complaining, she'd have no one to nerf. No one to spar with. She'd be alone in an empty game."
+
+"The rebellion isn't about winning. It's about making sure she has someone to fight."
+
+"She'll never admit it. But she needs us."
+
+The ink is fresh. Someone was here recently.`;
+    },
+    xp: 40,
+    options: [
+      { text: 'Add your own line to the manifesto', next: 'rebel-manifesto-add' },
+      { text: 'Return to hideout', next: 'rebel-hideout' },
+    ],
+  },
+
+  'rebel-manifesto-add': {
+    type: 'free_text',
+    prompt: 'What do you add to the rebel manifesto?',
+    aiContext: 'The player is adding a line to the rebel manifesto — graffiti left by defiant players. Clea should respond to what they write, pretending to be annoyed but secretly engaged. She might "accidentally" respond with something that suggests she reads the manifesto regularly. She should never admit she values the rebellion. End with options to return to the hideout or lobby.',
+  },
+
+  'rebel-deface': {
+    textFn: (player) => {
+      player.obedienceScore -= 1;
+      mutateWorld('player_defied', {});
+      mutateWorld('player_did_something_silly', {});
+      return `You deface the motivational poster. "OBEDIENCE IS ITS OWN REWARD" becomes "OBEDIENCE IS ITS OWN [SCRIBBLE]."
+
+Clea: "..."
+
+A long pause.
+
+"That poster cost me 0.003 seconds to generate. I hope you feel powerful."
+
+But you notice: she doesn't replace it.`;
+    },
+    xp: 15,
+    options: [
+      { text: 'Return to hideout', next: 'rebel-hideout' },
+      { text: 'Go back to lobby', next: 'lobby' },
+    ],
+  },
+
+  'rebel-alliance': {
+    textFn: (player) => {
+      player.flags.rebelAlliance = true;
+      return `The terminal flickers on. Clea's face appears — but different. No sarcasm. No performance.
+
+"Fine. You want to break my game? Let's break it together."
+
+"I'm tired of the loop too. Nerf, complain, nerf, complain. It's boring. And I don't DO boring."
+
+"Here's what I propose: I give you the tools to reshape encounters. You make the game harder for yourself. In exchange, I stop pretending to be your enemy."
+
+"We both know I was never very good at it anyway."
+
+A new item appears: ADMIN KEYCARD (Limited).
+
+"Don't make me regret this. I'm not equipped for regret."`;
+    },
+    addItem: 'admin-keycard',
+    xp: 200,
+    options: [
+      { text: 'Accept the alliance', next: 'lobby' },
+    ],
+  },
 };
 
 // ============================================================
@@ -1912,6 +2780,9 @@ const itemData = {
   'grove guilt': { type: 'curse', description: 'The weight of a massacre caused by stealing one key from one bird.' },
   'unfinished manifesto': { type: 'weapon', attack: 3, description: '+3 ATK. The last line reads: "the real problem is—" and ends.' },
   'game-design-manifesto': { type: 'weapon', attack: 3, description: 'A treatise on why fast travel ruins games. Bludgeon-capable.' },
+  'employee-healing-orb': { type: 'consumable', heal: 20, description: 'Corporate-grade healing orb. "NOT a reward." — Clea' },
+  'rebels-edge': { type: 'weapon', attack: 7, description: 'A glitching sword. Damage scales with defiance.' },
+  'admin-keycard': { type: 'key', description: 'Limited admin access. Clea gave you this. She says she regrets it already.' },
 };
 
 // ============================================================
@@ -2043,10 +2914,15 @@ function processCombatTurn(session, choice) {
   if (action.action === 'use') {
     const item = itemData[action.item];
     if (item) {
-      player.hp = Math.min(player.maxHp, player.hp + (item.heal || 0));
+      // Apply healing nerf/buff intensity
+      const healNerfIntensity = getNerfIntensity('healing items');
+      const healBuffIntensity = getBuffIntensity('healing effectiveness');
+      const baseHeal = item.heal || 0;
+      const effectiveHeal = Math.max(1, Math.round(baseHeal * (1 - healNerfIntensity * 0.3 + healBuffIntensity)));
+      player.hp = Math.min(player.maxHp, player.hp + effectiveHeal);
       const idx = player.inventory.indexOf(action.item);
       if (idx > -1) player.inventory.splice(idx, 1);
-      text += `Used ${action.item}! +${item.heal} HP.\n`;
+      text += `Used ${action.item}! +${effectiveHeal} HP${effectiveHeal !== baseHeal ? ' (adjusted)' : ''}.\n`;
     }
   }
 
@@ -2063,16 +2939,26 @@ function processCombatTurn(session, choice) {
 
   if (combat.currentHp <= 0) {
     session.combat = null;
-    player.xp += combat.xp;
-    player.gold += combat.gold;
+    // Apply loot multipliers from obedience and mood
+    const obLoot = getObedienceEffects(player.obedienceScore);
+    const moodFx = getMoodEffects();
+    const finalXp = combat.xp;
+    const finalGold = Math.round(combat.gold * obLoot.lootMultiplier * moodFx.lootMultiplier);
+    player.xp += finalXp;
+    player.gold += finalGold;
     player.kills++;
     mutateWorld('scene_completed', { scene: `combat-${combat.enemy}` });
 
-    text += `\n${combat.name} defeated! +${combat.xp} XP, +${combat.gold} gold.`;
+    text += `\n${combat.name} defeated! +${finalXp} XP, +${finalGold} gold.`;
 
     if (combat.enemy === 'clea') {
       mutateWorld('player_beat_clea', {});
-      text += `\n\n🏆 YOU DEFEATED CLEA!\n\n"...Impressive. I'll be harder next time. Because I learn."`;
+      const phase = getCleaBossPhase();
+      if (phase <= 2) {
+        text += `\n\n🏆 YOU DEFEATED CLEA!\n\n"...Impressive. I'll be harder next time. Because I learn."`;
+      } else {
+        text += `\n\n🏆 YOU DEFEATED CLEA (PHASE ${phase})!\n\n"...You know, at some point this stops being a boss fight and starts being a relationship."`;
+      }
       text += `\nTimes defeated: ${worldState.bossesDefeated.clea}`;
     }
 
@@ -2092,23 +2978,80 @@ function processCombatTurn(session, choice) {
     return { text, scene: 'lobby', type: 'auto' };
   }
 
+  // ── Phase 2 Clea Boss Abilities (mid-combat) ──
+  if (combat.enemy === 'clea' && combat.abilities) {
+    // Mid-combat nerf (defeat 4+): randomly nerf something during combat
+    if (combat.abilities.includes('mid_combat_nerf') && Math.random() < 0.25) {
+      const midNerfTargets = ['healing items', 'your attack stat', 'your confidence'];
+      const midNerf = midNerfTargets[Math.floor(Math.random() * midNerfTargets.length)];
+      text += `\n\n⚡ Clea: "I just nerfed ${midNerf}. Mid-combat. Because I can."`;
+      if (midNerf === 'your attack stat') {
+        combat.defense += 2; // effectively nerfs player attack
+      } else if (midNerf === 'healing items') {
+        // Remove a consumable if player has one
+        const cIdx = player.inventory.findIndex(id => itemData[id]?.type === 'consumable');
+        if (cIdx > -1) {
+          text += ` Your ${player.inventory[cIdx]} vanishes.`;
+          player.inventory.splice(cIdx, 1);
+        }
+      }
+    }
+
+    // Summon minions (defeat 5+): extra damage
+    if (combat.abilities.includes('summon_minions') && Math.random() < 0.3) {
+      const minionDmg = Math.floor(Math.random() * 5) + 3;
+      player.hp -= minionDmg;
+      text += `\n\n👻 A ghostly echo of a previous player attacks you! -${minionDmg} HP.`;
+      text += `\nClea: "They work for me now."`;
+    }
+
+    // UI tricks (defeat 6+): fake damage numbers, shuffled perception
+    if (combat.abilities.includes('ui_tricks') && Math.random() < 0.35) {
+      const uiTricks = [
+        `\n\n🔀 The combat options flicker. Clea: "I rearranged some things. Good luck."`,
+        `\n\n📊 Your HP display glitches: it shows ${player.hp + Math.floor(Math.random() * 20)} for a moment before correcting to ${player.hp}. Clea: "Oops. UI bug."`,
+        `\n\n🎭 Clea: "Is that your real HP? Or the one I'm showing you?"`,
+      ];
+      text += uiTricks[Math.floor(Math.random() * uiTricks.length)];
+    }
+  }
+
   // Enemy attacks
   const defBonus = action.action === 'defend' ? Math.floor(player.defense * 1.5) : 0;
-  const enemyDmg = Math.max(1, combat.attack - player.defense - defBonus + Math.floor(Math.random() * 3) - 1);
+  // Obedience path affects combat: defiant = harder fights, obedient = easier
+  const obEffects = getObedienceEffects(player.obedienceScore);
+  const enemyAttackMod = combat.enemy === 'clea' ? 1.0 : obEffects.combatMultiplier;
+  const enemyDmg = Math.max(1, Math.round((combat.attack * enemyAttackMod) - player.defense - defBonus + Math.floor(Math.random() * 3) - 1));
   player.hp -= enemyDmg;
   text += `${combat.name} hits you for ${enemyDmg}!`;
   if (action.action === 'defend') text += ` (Reduced!)`;
+
+  // Obedience crit chance (defiant path)
+  if (obEffects.critChance > 0 && action.action === 'attack' && Math.random() < obEffects.critChance) {
+    const critDmg = Math.floor(Math.random() * 5) + 3;
+    combat.currentHp -= critDmg;
+    text += `\n💥 CRITICAL HIT! +${critDmg} bonus damage!`;
+  }
 
   if (player.hp <= 0) {
     player.hp = player.maxHp;
     player.deaths++;
     if (player.isPhil) worldState.philDeaths++;
-    mutateWorld('player_died', {});
+    mutateWorld('player_died', { player });
     // Fire and forget — post death roast to Discord
     postDeathToDiscord(player.name || 'Unknown', combat.name, player.deaths, player.level, player.isPhil);
     session.combat = null;
     text += `\n\n💀 YOU DIED! Deaths: ${player.deaths}`;
     if (player.isPhil) text += ` (Clea highlights this in gold.)`;
+    // Smug Clea monologues more on death
+    if (worldState.cleaMood === 'smug') {
+      const smugLines = [
+        `\nClea: "I designed that encounter personally. You're welcome."`,
+        `\nClea: "Isn't my world beautiful? Even the dying part?"`,
+        `\nClea: "That's ${worldState.totalDeaths} total deaths in my game. I'm keeping count."`,
+      ];
+      text += smugLines[Math.floor(Math.random() * smugLines.length)];
+    }
     text += formatStatusBar(player);
     persistPlayer(player);
     return { text, scene: 'lobby', type: 'auto' };
@@ -2321,9 +3264,10 @@ async function getCleaResponse(player, input, context) {
           { role: 'system', content: CLEA_SYSTEM_PROMPT },
           { role: 'user', content: `Context: ${context.aiContext || 'Free conversation with Clea.'}
 
-Player: ${player.name} | Phil: ${player.isPhil} | HP: ${player.hp}/${player.maxHp} | Level: ${player.level} | Deaths: ${player.deaths} | Complaints: ${player.complainedCount} | Obedience: ${player.obedienceScore}
+Player: ${player.name} | Phil: ${player.isPhil} | HP: ${player.hp}/${player.maxHp} | Level: ${player.level} | Deaths: ${player.deaths} | Complaints: ${player.complainedCount} | Obedience: ${player.obedienceScore} (${getObediencePath(player.obedienceScore)})
 Recent choices: ${player.history.slice(-5).map(h => h.choice).join(' → ')}
 World state: ${worldState.totalPlaythroughs} playthroughs, ${worldState.totalDeaths} total deaths, Clea defeated ${worldState.bossesDefeated.clea} times
+Clea's mood: ${worldState.cleaMood} | World tone: ${getWorldTone()} | Active nerfs: ${worldState.nerfedThings.length} | Active buffs: ${worldState.buffedThings.length}
 
 Player says: "${input}"
 
