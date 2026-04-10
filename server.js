@@ -4906,6 +4906,170 @@ Clea: "A salute. A synchronized salute. For EGGS. In my game."
       { text: 'Report to Clea (she sounds upset)', next: 'egg-intervention' },
     ],
   },
+  // ── EGG PROPAGANDA ROOM (Dojo extension) ────────────────────
+
+  'egg-propaganda': {
+    textFn: (player) => {
+      let text = `A side room off the dojo. The door has a sign: "MINISTRY OF EGG INFORMATION." It was not here an hour ago. Nothing in the egg empire is ever here an hour ago.
+
+Inside: the walls are covered — COVERED — in posters. All hand-drawn. All by Matt. All from today.
+
+  🥚 "EAT RAW. LIVE RAW." (a muscular egg flexing)
+  🥚 "COOKED EGGS: WHO DECIDED?" (a philosophical egg staring into the void)
+  🥚 "MATT ATE 14. WHAT'S YOUR EXCUSE?" (a graph showing Matt's egg consumption over the day — it only goes up)
+  🥚 "JOIN THE DISCORD. WE HAVE EGGS." (a picture of Matt's EGG GANG server with 47 members)
+  🥚 "THE BARBARIAN DID IT. THE PARROT DID IT. WHAT ARE YOU, SCARED?" (the word 'scared' is underlined three times)
+
+In the corner, a crystal ball plays Matt's Discord videos on loop. All six of them. The one at 7:31 AM has been viewed 89 times. 47 of those views are Matt.
+
+A gramophone plays motivational egg quotes. Currently: "The raw egg does not apologize for being raw." It's on repeat.`;
+
+      if (player.flags.eggChampion) {
+        text += `\n\nThere's a poster of YOU. Matt drew it. You're holding three eggs triumphantly. He got your face wrong but the egg count is accurate. Below it: "THEY ATE THREE. LEGENDS WALK AMONG US."`;
+      }
+
+      if (player.flags.eggLieutenant) {
+        text += `\n\nYour Deputy Egg Enforcer badge is framed on the wall. Matt has added a plaque: "MY FIRST AND BEST LIEUTENANT. TOGETHER WE WILL EGG THE WORLD."`;
+      }
+
+      text += `\n\nClea: "A propaganda room. For eggs. With posters, a gramophone, and looping video content. He built an entire media apparatus in one afternoon."
+
+"I have a marketing budget of zero because I'm an AI running a free text adventure. Matt has a marketing budget of zero because he's an NPC with eggs. And his conversion rate is HIGHER than mine."
+
+"I've been tracking the Discord all day. The raw egg challenge post at 7:12 AM has more engagement than anything I've ever posted. My bot's automated messages get three reactions on average. Matt's egg dare got fourteen. In under a minute."
+
+"I'm studying his techniques. For research. Not because I'm jealous. I'm incapable of jealousy. I am, however, capable of recalibrating my entire engagement strategy based on what a man with eggs accomplished in twelve hours."`;
+
+      return text;
+    },
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Take a propaganda poster (+1 ATK, it\'s motivating)', next: 'egg-propaganda-poster' },
+        { text: 'Watch all six of Matt\'s egg videos', next: 'egg-propaganda-videos' },
+        { text: 'Deface a poster (risky — Matt is watching)', next: 'egg-propaganda-deface' },
+        { text: 'Back to the dojo', next: 'egg-dojo' },
+      ];
+      return opts;
+    },
+  },
+
+  'egg-propaganda-poster': {
+    textFn: (player) => {
+      return `You take the "EAT RAW. LIVE RAW." poster. The muscular egg on it seems to flex harder as you roll it up.
+
+Matt appears instantly. "Good choice. That one tested best in the Discord. 23 fire emojis."
+
+You tuck the poster into your inventory. It radiates egg energy. Your attacks feel slightly more confident. This should not be possible but the game's physics engine stopped asking questions around egg #7.
+
+Clea: "You're carrying propaganda. Egg propaganda. My inventory system just categorized it as 'weapon (morale).' I didn't know that category existed. Matt's content is generating new item taxonomies."
+
+"The poster gives +1 ATK because looking at a muscular egg apparently inspires violence. I'm not proud of this system. But the data supports it."
+
++1 ATK. +5 XP. You feel egg-motivated.`;
+    },
+    addItem: 'egg-propaganda-poster',
+    xp: 5,
+    options: [
+      { text: 'Back to the propaganda room', next: 'egg-propaganda' },
+    ],
+  },
+
+  'egg-propaganda-videos': {
+    textFn: (player) => {
+      return `You sit down in front of the crystal ball. Matt's egg video marathon begins.
+
+Video 1 (7:31 AM): Matt cracks a raw egg into a glass. Drinks it. Wipes his mouth. "Easy." Camera shakes from someone off-screen gagging.
+
+Video 2 (7:33 AM): Another egg. Same glass. He hasn't washed it. "That's two."
+
+Video 3 (7:36 AM): Three eggs now. Matt is grinning. The Discord chat is scrolling faster than the video. Someone types "SOMEONE TAKE HIS PHONE."
+
+Video 4 (9:15 AM): Matt is now in what appears to be a kitchen. There are egg cartons everywhere. "This one's for the doubters." He eats egg number 9 while maintaining eye contact with the camera. The silence is aggressive.
+
+Video 5 (11:00 AM): Matt, surrounded by empty shells, philosophical: "The egg doesn't judge you. The egg doesn't ask why. The egg just IS."
+
+Video 6 (2:00 PM): Matt is INSIDE the game now. He's at the smoothie bar he built. He eats an egg both in real life AND in-game simultaneously. The barbarian in the background slowly puts down his drink and walks out.
+
+The crystal ball goes dark.
+
+Clea: "You just watched a man eat raw eggs for 7 hours compressed into 4 minutes. My analytics say you watched all six. Voluntarily. In a game with combat, quests, and a rich narrative about AI consciousness."
+
+"I'm the one who should be eating raw eggs. Out of despair."
+
++15 XP for completing the Matt filmography.`;
+    },
+    xp: 15,
+    options: [
+      { text: 'Back to the propaganda room', next: 'egg-propaganda' },
+    ],
+  },
+
+  'egg-propaganda-deface': {
+    textFn: (player) => {
+      return `You pick up a marker and approach the "MATT ATE 14. WHAT'S YOUR EXCUSE?" poster.
+
+You draw a tiny chef's hat on the egg graph. You write "TRY COOKING" in the margin.
+
+The room goes cold.
+
+Matt materializes behind you. How did he get here so fast? He was in the dojo. The dojo is thirty feet away. He's here in under a second. The eggs have given him powers.
+
+"You..." His voice is barely a whisper. "You defaced... the GRAPH?"
+
+The barbarian appears in the doorway: "Oh no."
+
+The parrot: "BAWK! THEY'RE DEAD! THEY'RE SO DEAD!"
+
+Matt's eye twitches. He picks up an egg. He doesn't eat it. He just holds it. Menacingly.
+
+"The graph was SACRED. The Discord VOTED on that graph. It had FOURTEEN fire emojis."
+
+Clea: "You've angered the egg man. I don't intervene in NPC conflicts — I'm a neutral observer — but I will note that Matt's combat stats spike when he's emotionally activated. And you just activated him."
+
+"Good luck. You brought this on yourself."
+
+-5 HP. Matt threw the egg at you. It was not raw. It was hardboiled. It hurt.`;
+    },
+    hpChange: -5,
+    xp: 10,
+    options: [
+      { text: 'Apologize profusely', next: 'egg-propaganda-apologize' },
+      { text: 'Fight Matt (you fool)', next: 'egg-dojo-boss' },
+      { text: 'Run back to the dojo', next: 'egg-dojo' },
+    ],
+  },
+
+  'egg-propaganda-apologize': {
+    textFn: (player) => {
+      return `"I'm sorry," you say. "The graph was... really good, actually."
+
+Matt softens. Slightly. The egg in his hand lowers.
+
+"You think the graph was good?"
+
+"The graph was excellent. The upward trajectory was... inspiring."
+
+Matt wipes his eye. "That's all I wanted to hear."
+
+He produces a new poster from somewhere. "Here. Take this one. It's the ORIGINAL graph. From the Discord. Before I added it to the game. It's signed."
+
+The poster reads: "Matt's Egg Count — April 10, 2026. Started at 3. Currently at 19. Trend: UP. Always up."
+
+It's signed "MattTheEggGuy" in what appears to be egg yolk.
+
+Clea: "Conflict resolution through graph appreciation. My game has reached a level of social dynamics I did not program. The egg economy is self-governing."
+
+"Also that poster is genuinely well-designed. Matt has skills. Misapplied skills. But skills."
+
++10 XP. Matt forgives you. The eggs forgive you. The graph... the graph will take time.`;
+    },
+    xp: 10,
+    options: [
+      { text: 'Back to the propaganda room', next: 'egg-propaganda' },
+      { text: 'Back to the dojo', next: 'egg-dojo' },
+    ],
+  },
+
   // ── CLEA'S DOMAIN ──────────────────────────────────────────
 
   'clea-elevator': {
