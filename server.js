@@ -6112,7 +6112,6 @@ Clea: "The font was an error. I was processing an egg event at the time."
       { text: 'Back to the tavern (this was a lot)', next: 'tavern' },
     ],
   },
-
   'clea-elevator': {
     textFn: (player) => {
       if (player.level < 3) {
