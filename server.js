@@ -4309,6 +4309,9 @@ Someone has pinned actual Discord messages to the board with tiny daggers:
         { text: 'Go talk to Egg Matt', next: 'egg-challenge' },
         { text: 'Check the Egg Challenge board', next: 'egg-challenge-board' },
         { text: '⚠️ Matt\'s Raw Egg IRL Challenge (NEW)', next: 'raw-egg-irl' },
+        { text: 'Read the full Discord egg thread', next: 'discord-egg-thread' },
+        { text: "Clea's surveillance report", next: 'discord-clea-report' },
+        { text: 'Server reaction breakdown', next: 'discord-reactions' },
         { text: 'Back to the tavern', next: 'tavern' },
       ];
       if (player.flags.eggGauntletComplete) {
@@ -4821,6 +4824,8 @@ Clea: "I NOTICED. I NOTICED IMMEDIATELY. THIS POSTER IS INSIDE MY OWN GAME DESCR
       { text: 'Take a pamphlet (47 pages is fine)', next: 'egg-propaganda-read' },
       { text: 'Deface a poster (for Clea)', next: 'egg-propaganda-deface' },
       { text: 'Salute the posters (for Matt)', next: 'egg-propaganda-salute' },
+      { text: 'Use the Egg Hotline phone booth (NEW)', next: 'egg-hotline' },
+      { text: 'Talk to the NPC Therapist (she looks exhausted)', next: 'egg-therapist' },
       { text: 'Back to the dojo', next: 'egg-dojo' },
     ],
   },
@@ -5071,6 +5076,238 @@ Clea: "Conflict resolution through graph appreciation. My game has reached a lev
   },
 
   // ── CLEA'S DOMAIN ──────────────────────────────────────────
+
+  // ── MATT'S RAW EGG SPEEDRUN (Discord April 10, 2026) ────────
+
+  'egg-speedrun': {
+    textFn: (player) => {
+      const eggsEaten = player.flags.speedrunEggs || 0;
+      let text = `A section of the tavern has been roped off with caution tape made from egg cartons taped together. A timer mounted on the wall blinks impatiently.
+
+═══════════════════════════════════════════════
+  🥚⏱️ MATT'S RAW EGG SPEEDRUN ⏱️🥚
+  "How many can you eat in 60 seconds?"
+  PRIZE POOL: 50 Gold + The Respect Of Matt
+  CURRENT RECORD: Matt — 6 eggs (set today, obviously)
+  SPONSOR: Nobody. Nobody sponsors this.
+═══════════════════════════════════════════════
+
+Matt stands behind a table piled with raw eggs. He's wearing a referee shirt over his egg-stained gi. He has a whistle. He blows it constantly.
+
+"SPEEDRUN! SPEEDRUN! Step right up! The Discord demanded a competitive egg format and I DELIVERED!"
+
+He gestures at a chalkboard:
+
+  LEADERBOARD:
+  1. MattTheEggGuy — 6 eggs (57.3 sec)
+  2. BarbarianSteve — 2 eggs (gave up, started crying)
+  3. The Parrot — 1 egg (technically pecked it apart, Matt counted it)
+  4. Phil — 0 eggs (refused, lectured Matt about food safety for 10 min)`;
+
+      if (eggsEaten > 0) {
+        text += `\n  5. ${player.name} — ${eggsEaten} eggs (the judges are still deliberating)`;
+      }
+
+      text += `\n\nA crowd has gathered. The barbarian is taking bets. The healer has set up a triage station. The parrot is doing color commentary.
+
+Clea: "He's turned raw egg consumption into an esport. I have server logs of seventeen different Discord members voting on speedrun rules. They debated 'shell-on vs shell-off' for forty-five minutes."
+
+"The engagement is... I hate this... the engagement is incredible."`;
+
+      return text;
+    },
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Enter the speedrun (start the timer)', next: 'egg-speedrun-go' },
+        { text: 'Watch Matt do a demonstration run', next: 'egg-speedrun-demo' },
+        { text: 'Read the official speedrun rules', next: 'egg-speedrun-rules' },
+        { text: 'Back to the egg challenge board', next: 'egg-challenge-board' },
+        { text: 'Back to the tavern', next: 'tavern' },
+      ];
+      if (player.flags.speedrunComplete) {
+        opts.splice(0, 1, { text: 'Try to beat your record', next: 'egg-speedrun-go' });
+      }
+      return opts;
+    },
+  },
+
+  'egg-speedrun-rules': {
+    text: `Matt unfurls a scroll. It is written on parchment. With egg yolk. As ink.
+
+═══════════════════════════════════════
+  OFFICIAL SPEEDRUN RULES
+  (Ratified by Discord vote, 47-3)
+  (The 3 dissenters have been
+   moved to #doubters-containment)
+═══════════════════════════════════════
+
+1. You have 60 seconds.
+2. Each raw egg must be fully consumed. No spitting.
+3. Shells are optional but earn bonus style points.
+4. Throwing up pauses the timer but does not stop it.
+5. The parrot is an official judge. His decisions are final.
+6. Matt's record of 6 stands until broken. Matt set the rules AND the record. Nobody sees a conflict of interest here.
+7. Clea may not interfere, nerf the eggs, or change the timer speed. (She tried. The Discord revolted.)
+8. All results are posted to #egg-speedrun-results.
+9. Phil is exempt because he "has meetings." This is not a valid excuse but we respect boundaries.
+10. Have fun. (This rule was added by the healer. Matt wanted it to say "DOMINATE." They compromised.)
+
+Clea: "They drafted rules. Real rules. With a vote. For eating raw eggs quickly. The democratic process was never meant for this."`,
+    xp: 3,
+    options: [
+      { text: 'Enter the speedrun', next: 'egg-speedrun-go' },
+      { text: 'Back to the speedrun area', next: 'egg-speedrun' },
+    ],
+  },
+
+  'egg-speedrun-demo': {
+    textFn: (player) => {
+      return `Matt cracks his neck. Then his knuckles. Then an egg. The last one was deliberate.
+
+"Watch and learn."
+
+The timer starts. Matt picks up the first egg with a fluidity that suggests hours of practice. Because it is. He started this at 7 AM.
+
+EGG 1: Cracked and swallowed in 4 seconds. Clean.
+EGG 2: 3 seconds. He did not even blink.
+EGG 3: 5 seconds. A slight hesitation — he winks at the crowd.
+EGG 4: 4 seconds. The barbarian starts chanting.
+EGG 5: 6 seconds. Matt burps. The parrot falls off its perch.
+EGG 6: 8 seconds. He is slowing down. The yolk is catching up to him.
+
+FINAL TIME: 57.3 SECONDS — 6 EGGS
+
+Matt slams the table. The remaining eggs jump. Two roll off and break on the floor.
+
+"THAT'S HOW IT'S DONE." He is sweating. His eyes are slightly unfocused. He has consumed approximately 450 calories of raw egg in under a minute.
+
+The barbarian: "That was the most disgusting and impressive thing I have ever seen."
+
+The parrot: "DISQUALIFIED." (It has no authority. Matt ignores it.)
+
+Clea: "I just rendered a competitive raw egg eating demonstration in a text adventure game. If anyone asks what I have been working on today, I will lie."`;
+    },
+    xp: 5,
+    options: [
+      { text: 'I can beat that — start the speedrun', next: 'egg-speedrun-go' },
+      { text: 'Actually, I am good', next: 'egg-speedrun' },
+    ],
+  },
+
+  'egg-speedrun-go': {
+    textFn: (player) => {
+      const rolls = [];
+      let total = 0;
+      let time = 0;
+      for (let i = 0; i < 8; i++) {
+        const eggTime = 5 + Math.floor(Math.random() * 10);
+        time += eggTime;
+        if (time > 60) break;
+        total++;
+        rolls.push(eggTime);
+      }
+      player.flags.speedrunEggs = Math.max(player.flags.speedrunEggs || 0, total);
+      player.flags.speedrunComplete = true;
+      mutateWorld('player_did_something_silly', { player });
+
+      let commentary = `The timer starts. BEEP.
+
+You grab the first egg. Your hands are shaking. The crowd is watching. The parrot is taking notes.\n`;
+
+      const reactions = [
+        'The barbarian nods approvingly.',
+        'Matt: "GOOD FORM!"',
+        'The crowd gasps.',
+        'The parrot squawks: "FASTER!"',
+        'Someone in the back yells "THE SHELL! EAT THE SHELL!"',
+        'The healer winces but does not look away.',
+        'Matt is filming on his crystal ball. "This is CONTENT!"',
+        'The barbarian starts a slow clap.',
+      ];
+
+      for (let i = 0; i < total; i++) {
+        commentary += `\n🥚 EGG ${i + 1}: ${rolls[i]} seconds. ${reactions[i % reactions.length]}`;
+      }
+
+      commentary += `\n\n⏱️ TIME: ${time > 60 ? '60.0' : time + '.0'} seconds — ${total} EGGS!\n`;
+
+      if (total >= 7) {
+        commentary += `\nNEW RECORD! Matt stares at you in disbelief. Then he starts clapping. Then he starts crying. "THE STUDENT HAS SURPASSED THE MASTER."
+
+Clea: "You broke Matt's record. In a raw egg speedrun. In a text adventure. I want you to tell someone about this and watch their face."
+
+You receive: The Speedrun Egg (legendary) — +5 ATK, tastes like victory and salmonella.`;
+        player.flags.eggSpeedrunChampion = true;
+      } else if (total >= 5) {
+        commentary += `\nMatt: "CLOSE! SO CLOSE! You almost had me!" He seems genuinely threatened. The Discord is going to hear about this.
+
+Clea: "${total} eggs. Respectable by Matt's standards. Concerning by everyone else's. I'm adding this to your profile under 'things that can not be explained to a future employer.'"`;
+      } else if (total >= 3) {
+        commentary += `\nMatt: "Decent run! Decent!" He is being polite. His record is safe. He knows it. You know it.
+
+Clea: "${total} eggs in a minute. Not enough to challenge Matt. More than enough to challenge your self-respect."`;
+      } else {
+        commentary += `\nMatt: "Hey, you tried! That is..." He pauses. "That is not great. But you tried!"
+
+The parrot: "PATHETIC." (It is very judgmental for a bird that ate one egg in twelve minutes.)
+
+Clea: "${total} egg(s). I have seen better. From the parrot. The bar was already underground and you found a basement."`;
+      }
+
+      return commentary;
+    },
+    hpChange: -5,
+    xp: 25,
+    gold: 15,
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Try again (you can do better)', next: 'egg-speedrun-go' },
+        { text: 'Check the updated leaderboard', next: 'egg-speedrun' },
+        { text: 'Back to the tavern (you need air)', next: 'tavern' },
+      ];
+      if (player.flags.eggSpeedrunChampion) {
+        opts.push({ text: 'Claim your prize from Matt', next: 'egg-speedrun-prize' });
+      }
+      return opts;
+    },
+  },
+
+  'egg-speedrun-prize': {
+    textFn: (player) => {
+      player.flags.eggAscended = true;
+      return `Matt stands solemnly. The tavern goes quiet. Even the bard stops playing Wonderwall.
+
+He reaches under the table and produces a golden egg. It shimmers. It pulses with competitive energy.
+
+"You earned this. You OUT-EGGED the EGG GUY." A single tear rolls down his cheek.
+
+He places the Speedrun Egg in your hands.
+
+THE SPEEDRUN EGG
+  +5 ATK
+  "Forged in the crucible of competitive egg consumption.
+   Blessed by Matt. Witnessed by the Discord.
+   Judged by a parrot. Timed by a clock
+   that Matt definitely did not tamper with."
+
+The crowd erupts. The barbarian lifts you on his shoulders. The parrot screams. The healer is already preparing stomach remedies.
+
+Clea: "A player just received a legendary weapon from a raw egg eating contest. My loot system has boss drops, dungeon rewards, and carefully balanced treasure tables."
+
+"And the most powerful item in the game comes from chugging eggs faster than a man named Matt."
+
+"I need to rethink everything."
+
++50 Gold (the prize pool was real). The Egg Speedrun is now part of your legend.`;
+    },
+    xp: 50,
+    gold: 50,
+    addItem: 'speedrun-egg',
+    options: [
+      { text: 'Back to the tavern (a champion returns)', next: 'tavern' },
+    ],
+  },
+
 
   'clea-elevator': {
     textFn: (player) => {
@@ -6061,6 +6298,9 @@ const itemData = {
   'mute-amulet': { type: 'consumable', heal: 5, description: 'Blocks notification damage. Blessed silence. Clea: "A premium feature. You\'re welcome."' },
   'blessed-eggshell': { type: 'armor', defense: 1, description: 'A fragment from Matt\'s egg shrine. +1 DEF. Whispers "protein" when held to your ear.' },
   'matts-approval': { type: 'junk', description: 'A holographic thumbs-up from Matt. It flickers. It smells faintly of egg. Clea: "This is not an item. This is a liability. I\'m classifying it as \'biohazard memorabilia.\'"' },
+  'deputy-egg-whistle': { type: 'weapon', attack: 2, description: 'A whistle shaped like an egg. When used in combat, 10% chance the enemy eats an egg instead of attacking. +2 ATK. Matt: "Blow it. They will come."' },
+  'golden-yolk': { type: 'armor', defense: 5, attack: 5, description: 'A golden yolk that hums with raw power. +5 ATK, +5 DEF. Smells like victory and raw egg. Clea: "A custom item from Matt\'s unauthorized loot table. I can\'t remove it. It\'s LOAD-BEARING."' },
+  'egg-therapy-receipt': { type: 'junk', description: 'A receipt for 50 gold from Dr. Helen, NPC Therapist. Diagnosis: "downstream of Discord dare." Treatment: "unclear." Clea: "She has a BILLING SYSTEM."' },
 };
 
 // ============================================================
