@@ -83,10 +83,10 @@ const CY = '#0FF';
 // SPRITES
 // ========================================
 
-// Matt: short brown hair, short beard, katana, blue "M" shirt
+// Matt: shorter hair, short beard, katana, blue "MATT" shirt
 const MATT_STAND = [
-  [0,0,H1,H1,H1,H1,0,0],
-  [0,H1,H1,H1,H1,H1,H1,0],
+  [0,0,H1,H1,H1,0,0,0],
+  [0,H1,H1,H1,H1,H1,0,0],
   [0,SK,SK,SK,SK,SK,SK,0],
   [0,SK,BK,SK,SK,BK,SK,0],
   [0,SK,SK,SK,SK,SK,SK,0],
@@ -99,8 +99,8 @@ const MATT_STAND = [
   [0,0,BR,0,0,BR,0,0],
 ];
 const MATT_RUN = [
-  [0,0,H1,H1,H1,H1,0,0],
-  [0,H1,H1,H1,H1,H1,H1,0],
+  [0,0,H1,H1,H1,0,0,0],
+  [0,H1,H1,H1,H1,H1,0,0],
   [0,SK,SK,SK,SK,SK,SK,0],
   [0,SK,BK,SK,SK,BK,SK,0],
   [0,SK,SK,SK,SK,SK,SK,0],
@@ -113,8 +113,8 @@ const MATT_RUN = [
   [0,0,0,0,0,BR,0,0],
 ];
 const MATT_ATTACK = [
-  [0,0,H1,H1,H1,H1,0,0,0,0,0,0],
-  [0,H1,H1,H1,H1,H1,H1,0,0,0,0,0],
+  [0,0,H1,H1,H1,0,0,0,0,0,0,0],
+  [0,H1,H1,H1,H1,H1,0,0,0,0,0,0],
   [0,SK,SK,SK,SK,SK,SK,0,0,0,0,0],
   [0,SK,BK,SK,SK,BK,SK,0,0,0,0,0],
   [0,SK,SK,SK,SK,SK,SK,0,0,0,0,0],
@@ -345,6 +345,16 @@ const QUIPS = [
   "You just got Zombocom'd!",
   "That's impossible! ...wait, no it's not.",
   "50 raw eggs? Maybe next time.",
+  "MATT HOPSCOTCH!",
+  "Hopscotch MVP, three years running!",
+  "Seattle Cups of Water represent!",
+  "That's the hopscotch technique!",
+  "You just got hopscotched!",
+  "Zombocom boost ACTIVATED!",
+  "This jetpack runs on pure Zombocom energy!",
+  "Chili's heals all wounds!",
+  "Large Marge ain't got nothin' on us!",
+  "Mrs. Palmeri's chicken farm is OVER!",
 ];
 
 let quipTimer = 0;
@@ -564,8 +574,11 @@ function resetPlayer() {
   player.attackCooldown = 0;
   player.invincible = 0; player.speedBoost = 0;
   player.jetpack = 0; player.dead = false;
-  player.animFrame = 0;
+  player.animFrame = 0; player.hopscotchCooldown = 0;
 }
+
+// Random Chili's pop-up timer
+let chilisPopTimer = 600 + Math.random() * 600;
 
 // ========================================
 // ENTITIES
@@ -810,7 +823,7 @@ function drawTitle() {
   ctx.fillText('A ZOMBOCOM PRODUCTION — YOU CAN DO ANYTHING AT ZOMBOCOM', W/2, 530);
   ctx.fillText('CREATIVE DIRECTORS: MATT (.moejontana) & JOHN (jkclancey7)', W/2, 548);
   ctx.fillStyle = '#555';
-  ctx.fillText('ARROWS/WASD: MOVE | SPACE/UP/W: JUMP | Z/K: ATTACK | X/L: INTERACT', W/2, 575);
+  ctx.fillText('MOVE: Arrows/WASD | JUMP: Space/Up | ATK: Z/K | USE: X/L', W/2, 575);
 }
 
 // ========================================
@@ -828,6 +841,7 @@ const INTRO_TEXT = [
   "",
   "Matt, professional hopscotch player,",
   "3x MVP of the Seattle Cups of Water.",
+  "They call his signature move the MATT HOPSCOTCH.",
   "",
   "John, Zombocom philosopher,",
   "the one true Dumpster Champion.",
@@ -930,11 +944,15 @@ function drawSelect() {
   ctx.fillText('Weapon: Katana', mattX, 255);
   ctx.fillText('Speed: ★★★★★', mattX, 275);
   ctx.fillText('Power: ★★★☆☆', mattX, 295);
-  ctx.fillStyle = '#888';
-  ctx.font = '11px monospace';
-  ctx.fillText('3x MVP Hopscotch', mattX, 320);
+  ctx.fillStyle = '#0FF';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText('3x MVP HOPSCOTCH', mattX, 320);
   ctx.fillText('Seattle Cups of Water', mattX, 336);
-  ctx.fillText('"Fast & sleek"', mattX, 360);
+  ctx.fillStyle = '#FF0';
+  ctx.fillText('Special: MATT HOPSCOTCH', mattX, 356);
+  ctx.fillStyle = '#888';
+  ctx.font = '9px monospace';
+  ctx.fillText('(↓+ATK in air = stomp!)', mattX, 370);
 
   // John panel
   const johnX = 3*W/4;
@@ -1082,7 +1100,7 @@ function updateGame() {
       }
     }
     player.jetpack--;
-    if (player.jetpack <= 0) addFloatingText(player.x, player.y, 'Jetpack Empty!', '#F90');
+    if (player.jetpack <= 0) addFloatingText(player.x, player.y, 'Zombocom Boost Empty!', '#F90');
   }
 
   // Attack
@@ -1096,6 +1114,62 @@ function updateGame() {
   if (player.attackTimer > 0) player.attackTimer--;
   else player.attacking = false;
   if (player.attackCooldown > 0) player.attackCooldown--;
+
+  // Matt's Hopscotch Stomp: down+attack while airborne
+  if (player.hopscotchCooldown > 0) player.hopscotchCooldown--;
+  if (selectedChar === 'matt' && !player.grounded && (keys['ArrowDown'] || keys['KeyS']) && (keys['KeyZ'] || keys['KeyK']) && player.hopscotchCooldown <= 0) {
+    player.vy = 12; // Slam downward
+    player.hopscotchCooldown = 45;
+    maybeQuip("MATT HOPSCOTCH!");
+    // Hopscotch stomp damages all grounded enemies nearby on landing
+    player._hopscotchActive = true;
+  }
+  // Check hopscotch landing
+  if (player._hopscotchActive && player.grounded) {
+    player._hopscotchActive = false;
+    shakeTimer = 8;
+    shakeIntensity = 4;
+    sfxHit();
+    spawnParticles(player.x + player.w/2, player.y + player.h, '#0FF', 12);
+    addFloatingText(player.x, player.y - 10, 'HOPSCOTCH!', '#0FF');
+    for (const e of enemies) {
+      if (e.hp > 0 && Math.abs(e.x - player.x) < 60 && Math.abs(e.y - player.y) < 40) {
+        e.hp -= 3;
+        e.vy = -6;
+        e.hitTimer = 15;
+        spawnParticles(e.x + e.w/2, e.y, '#0FF', 6);
+        if (e.hp <= 0) { score += 150; addFloatingText(e.x, e.y, '+150 STOMPED!', '#0FF'); }
+      }
+    }
+    if (boss && boss.active && Math.abs(boss.x - player.x) < 60) {
+      boss.hp -= 3;
+      boss.hitTimer = 10;
+      sfxBossHit();
+      addFloatingText(boss.x, boss.y, 'HOPSCOTCH HIT!', '#0FF');
+    }
+  }
+
+  // Random Chili's pop-up during gameplay
+  if (!LEVELS[level].boss) {
+    chilisPopTimer--;
+    if (chilisPopTimer <= 0) {
+      // Find a random platform to spawn a Chili's on
+      const plats = platforms.filter(p => p.w >= 80);
+      if (plats.length > 0) {
+        const p = plats[Math.floor(Math.random() * plats.length)];
+        const cx = p.x + 20 + Math.random() * (p.w - 60);
+        const cy = p.y - 20;
+        // Check no duplicate nearby
+        const tooClose = items.some(i => i.type === 'chilis' && !i.collected && Math.abs(i.x - cx) < 60);
+        if (!tooClose) {
+          spawnItem('chilis', cx, cy);
+          addFloatingText(cx, cy - 15, "Chili's appeared!", '#F44');
+          spawnParticles(cx + 10, cy, '#F44', 8);
+        }
+      }
+      chilisPopTimer = 480 + Math.random() * 480;
+    }
+  }
 
   // Buff timers
   if (player.invincible > 0) player.invincible--;
@@ -1318,10 +1392,14 @@ function updateGame() {
       }
     } else if (item.type === 'jetpack') {
       item.collected = true;
-      player.jetpack = 240;
+      player.jetpack = 300;
       sfxPickup();
-      addFloatingText(item.x, item.y - 5, 'JANKY JETPACK!', '#F90');
+      addFloatingText(item.x, item.y - 5, 'ZOMBOCOM BOOST!', '#F90');
+      setTimeout(() => addFloatingText(item.x, item.y - 25, 'The only limit is yourself!', '#0F0'), 400);
+      spawnParticles(item.x + 10, item.y, '#F90', 12);
+      spawnParticles(item.x + 10, item.y, '#FF0', 8);
       score += 50;
+      maybeQuip("This jetpack runs on pure Zombocom energy!");
     } else if (item.type === 'margarita') {
       item.collected = true;
       player.invincible = 360;
@@ -1728,18 +1806,33 @@ function drawGame() {
       ctx.textAlign = 'center';
       ctx.fillText("[X] Chili's", item.x + 10, iy - 5);
     } else if (item.type === 'jetpack') {
-      ctx.fillStyle = '#777';
-      ctx.fillRect(item.x + 3, iy, 14, 16);
+      ctx.fillStyle = '#666';
+      ctx.fillRect(item.x + 2, iy, 16, 18);
       ctx.fillStyle = '#555';
-      ctx.fillRect(item.x + 5, iy + 2, 10, 12);
+      ctx.fillRect(item.x + 4, iy + 2, 12, 14);
+      // Z logo
+      ctx.fillStyle = '#0F0';
+      ctx.font = 'bold 8px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Z', item.x + 10, iy + 12);
       ctx.fillStyle = OR;
       const fh = 4 + Math.sin(gameTime * 0.2) * 3;
-      ctx.fillRect(item.x + 5, iy + 16, 4, fh);
-      ctx.fillRect(item.x + 11, iy + 16, 4, fh);
-      ctx.fillStyle = '#FFF';
-      ctx.font = '8px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('JET', item.x + 10, iy - 3);
+      ctx.fillRect(item.x + 4, iy + 18, 4, fh);
+      ctx.fillRect(item.x + 12, iy + 18, 4, fh);
+      ctx.fillStyle = '#FF0';
+      ctx.fillRect(item.x + 5, iy + 18, 2, fh * 0.6);
+      ctx.fillRect(item.x + 13, iy + 18, 2, fh * 0.6);
+      // Glow
+      ctx.fillStyle = `rgba(255,153,0,${0.1 + Math.sin(gameTime * 0.08) * 0.05})`;
+      ctx.beginPath();
+      ctx.arc(item.x + 10, iy + 9, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#F90';
+      ctx.font = 'bold 8px monospace';
+      ctx.fillText('ZOMBOCOM', item.x + 10, iy - 8);
+      ctx.fillStyle = '#FF0';
+      ctx.font = '7px monospace';
+      ctx.fillText('BOOST', item.x + 10, iy - 1);
     } else if (item.type === 'margarita') {
       // Margarita glass
       ctx.fillStyle = '#0DD';
@@ -1836,7 +1929,7 @@ function drawGame() {
     ctx.font = 'bold 11px monospace';
     ctx.textAlign = 'center';
     const bossName = boss.type === 'palmeri'
-      ? (boss.phase === 'marge' ? 'LARGE MARGE - ENRAGED!' : 'MRS. PALMERI & LARGE MARGE')
+      ? (boss.phase === 'marge' ? 'LARGE MARGE - ENRAGED! 🐔' : 'MRS. PALMERI & LARGE MARGE 🐔')
       : (boss.phase === 2 ? 'CHIP - MAXIMUM HYDRATION!' : 'CHIP FROM GATORADE');
     ctx.fillText(bossName, W/2, 26);
   }
@@ -1893,14 +1986,36 @@ function drawGame() {
       ctx.stroke();
     }
 
-    // Jetpack backpack
+    // Name label on t-shirt (drawn over sprite)
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold 6px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(selectedChar === 'matt' ? 'MATT' : 'JOHN', player.x + player.w/2, player.y + 16);
+
+    // Jetpack backpack (Zombocom Boost)
     if (player.jetpack > 0) {
-      ctx.fillStyle = '#777';
-      ctx.fillRect(player.x + 2, player.y + player.h - 8, 12, 10);
+      ctx.fillStyle = '#666';
+      ctx.fillRect(player.x + 1, player.y + player.h - 10, 14, 12);
+      ctx.fillStyle = '#555';
+      ctx.fillRect(player.x + 3, player.y + player.h - 8, 10, 8);
+      // "Z" logo on jetpack
+      ctx.fillStyle = '#0F0';
+      ctx.font = 'bold 6px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Z', player.x + 8, player.y + player.h - 2);
+      // Flames - janky, flickering
       ctx.fillStyle = '#F60';
-      const jfh = 3 + Math.random() * 4;
-      ctx.fillRect(player.x + 4, player.y + player.h + 2, 3, jfh);
-      ctx.fillRect(player.x + 9, player.y + player.h + 2, 3, jfh);
+      const jfh = 4 + Math.random() * 6;
+      ctx.fillRect(player.x + 3, player.y + player.h + 2, 4, jfh);
+      ctx.fillRect(player.x + 9, player.y + player.h + 2, 4, jfh);
+      ctx.fillStyle = '#FF0';
+      const jfh2 = 2 + Math.random() * 4;
+      ctx.fillRect(player.x + 4, player.y + player.h + 2, 2, jfh2);
+      ctx.fillRect(player.x + 10, player.y + player.h + 2, 2, jfh2);
+      // Smoke puffs
+      if (Math.random() > 0.6) {
+        spawnParticles(player.x + 6, player.y + player.h + jfh, '#888', 1);
+      }
     }
 
     // Speed boost aura
@@ -2059,7 +2174,7 @@ function drawHUD() {
     ctx.fillStyle = '#F0F'; ctx.fillText(`SHIELD ${Math.ceil(player.invincible/60)}s`, 10, buffY); buffY += 13;
   }
   if (player.jetpack > 0) {
-    ctx.fillStyle = '#F90'; ctx.fillText(`JETPACK ${Math.ceil(player.jetpack/60)}s`, 10, buffY); buffY += 13;
+    ctx.fillStyle = '#F90'; ctx.fillText(`Z-BOOST ${Math.ceil(player.jetpack/60)}s`, 10, buffY); buffY += 13;
   }
 
   // Enemies remaining (non-boss levels)
@@ -2080,7 +2195,7 @@ function drawHUD() {
   // Controls
   ctx.fillStyle = '#333';
   ctx.font = '9px monospace';
-  ctx.fillText('ARROWS/WASD: Move | SPACE/UP: Jump | Z/K: Attack | X/L: Interact', W/2, H - 3);
+  ctx.fillText('MOVE: Arrows/WASD | JUMP: Space/Up | ATK: Z/K | USE: X/L | Matt: ↓+ATK=Hopscotch', W/2, H - 3);
 }
 
 // ========================================
