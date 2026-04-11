@@ -1,0 +1,2273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Egg Climbers: The Zombocom Saga</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: monospace; }
+canvas { image-rendering: pixelated; image-rendering: crisp-edges; border: 2px solid #333; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+// ========================================
+// EGG CLIMBERS: THE ZOMBOCOM SAGA
+// A Zombocom Production
+// Creative Directors: Matt & John
+// ========================================
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const W = 800, H = 600;
+canvas.width = W; canvas.height = H;
+
+function resizeCanvas() {
+  const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+  canvas.style.width = (W * scale) + 'px';
+  canvas.style.height = (H * scale) + 'px';
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ========================================
+// INPUT
+// ========================================
+const keys = {};
+const justPressed = {};
+window.addEventListener('keydown', e => {
+  if (!keys[e.code]) justPressed[e.code] = true;
+  keys[e.code] = true;
+  e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; e.preventDefault(); });
+function consumeKey(code) { const v = justPressed[code]; justPressed[code] = false; return v; }
+
+// ========================================
+// PIXEL ART RENDERER
+// ========================================
+function drawPixelArt(x, y, pixels, scale = 2) {
+  for (let row = 0; row < pixels.length; row++) {
+    for (let col = 0; col < pixels[row].length; col++) {
+      const c = pixels[row][col];
+      if (c) {
+        ctx.fillStyle = c;
+        ctx.fillRect(Math.floor(x + col * scale), Math.floor(y + row * scale), scale, scale);
+      }
+    }
+  }
+}
+
+// Color shortcuts
+const SK = '#FFD5AA'; // skin
+const H1 = '#5C3A1A'; // brown hair
+const H2 = '#222';    // dark hair
+const WH = '#FFF';
+const BK = '#000';
+const RD = '#E33';
+const BU = '#36F';
+const GN = '#3A3';
+const YL = '#FF0';
+const GY = '#888';
+const DG = '#444';
+const BR = '#8B4513';
+const OR = '#F90';
+const PK = '#F9F';
+const LB = '#6BF';
+const CY = '#0FF';
+
+// ========================================
+// SPRITES
+// ========================================
+
+// Matt: short brown hair, short beard, katana, blue "M" shirt
+const MATT_STAND = [
+  [0,0,H1,H1,H1,H1,0,0],
+  [0,H1,H1,H1,H1,H1,H1,0],
+  [0,SK,SK,SK,SK,SK,SK,0],
+  [0,SK,BK,SK,SK,BK,SK,0],
+  [0,SK,SK,SK,SK,SK,SK,0],
+  [0,0,BR,SK,SK,BR,0,0],
+  [0,BU,BU,BU,BU,BU,BU,0],
+  [0,BU,WH,BU,WH,BU,BU,0],
+  [GY,BU,WH,BU,WH,BU,BU,GY],
+  [GY,0,BU,BU,BU,BU,0,0],
+  [0,0,BU,0,0,BU,0,0],
+  [0,0,BR,0,0,BR,0,0],
+];
+const MATT_RUN = [
+  [0,0,H1,H1,H1,H1,0,0],
+  [0,H1,H1,H1,H1,H1,H1,0],
+  [0,SK,SK,SK,SK,SK,SK,0],
+  [0,SK,BK,SK,SK,BK,SK,0],
+  [0,SK,SK,SK,SK,SK,SK,0],
+  [0,0,BR,SK,SK,BR,0,0],
+  [0,BU,BU,BU,BU,BU,BU,0],
+  [0,BU,WH,BU,WH,BU,BU,0],
+  [GY,BU,WH,BU,WH,BU,BU,GY],
+  [GY,0,BU,BU,BU,BU,0,0],
+  [0,BR,0,0,0,0,BR,0],
+  [0,0,0,0,0,BR,0,0],
+];
+const MATT_ATTACK = [
+  [0,0,H1,H1,H1,H1,0,0,0,0,0,0],
+  [0,H1,H1,H1,H1,H1,H1,0,0,0,0,0],
+  [0,SK,SK,SK,SK,SK,SK,0,0,0,0,0],
+  [0,SK,BK,SK,SK,BK,SK,0,0,0,0,0],
+  [0,SK,SK,SK,SK,SK,SK,0,0,0,0,0],
+  [0,0,BR,SK,SK,BR,0,0,0,0,0,0],
+  [0,BU,BU,BU,BU,BU,BU,0,0,0,0,0],
+  [0,BU,WH,BU,WH,BU,BU,GY,GY,GY,GY,WH],
+  [0,BU,WH,BU,WH,BU,BU,0,0,0,0,0],
+  [0,0,BU,BU,BU,BU,0,0,0,0,0,0],
+  [0,0,BU,0,0,BU,0,0,0,0,0,0],
+  [0,0,BR,0,0,BR,0,0,0,0,0,0],
+];
+
+// John: long dark hair, big beard, claymore, red "J" shirt
+const JOHN_STAND = [
+  [0,H2,H2,H2,H2,H2,H2,0],
+  [H2,H2,H2,H2,H2,H2,H2,H2],
+  [H2,SK,SK,SK,SK,SK,SK,H2],
+  [0,SK,BK,SK,SK,BK,SK,0],
+  [0,SK,SK,SK,SK,SK,SK,0],
+  [0,BR,BR,BR,BR,BR,BR,0],
+  [0,RD,RD,RD,RD,RD,RD,0],
+  [0,RD,WH,RD,RD,WH,RD,0],
+  [GY,RD,WH,RD,RD,WH,RD,GY],
+  [GY,0,RD,RD,RD,RD,0,0],
+  [0,0,RD,0,0,RD,0,0],
+  [0,0,BR,0,0,BR,0,0],
+];
+const JOHN_RUN = [
+  [0,H2,H2,H2,H2,H2,H2,0],
+  [H2,H2,H2,H2,H2,H2,H2,H2],
+  [H2,SK,SK,SK,SK,SK,SK,H2],
+  [0,SK,BK,SK,SK,BK,SK,0],
+  [0,SK,SK,SK,SK,SK,SK,0],
+  [0,BR,BR,BR,BR,BR,BR,0],
+  [0,RD,RD,RD,RD,RD,RD,0],
+  [0,RD,WH,RD,RD,WH,RD,0],
+  [GY,RD,WH,RD,RD,WH,RD,GY],
+  [GY,0,RD,RD,RD,RD,0,0],
+  [0,BR,0,0,0,0,BR,0],
+  [0,0,0,0,0,BR,0,0],
+];
+const JOHN_ATTACK = [
+  [0,H2,H2,H2,H2,H2,H2,0,0,0,0,0,0,0],
+  [H2,H2,H2,H2,H2,H2,H2,H2,0,0,0,0,0,0],
+  [H2,SK,SK,SK,SK,SK,SK,H2,0,0,0,0,0,0],
+  [0,SK,BK,SK,SK,BK,SK,0,0,0,0,0,0,0],
+  [0,SK,SK,SK,SK,SK,SK,0,0,0,0,0,0,0],
+  [0,BR,BR,BR,BR,BR,BR,0,0,0,0,0,0,0],
+  [0,RD,RD,RD,RD,RD,RD,0,0,0,0,0,0,0],
+  [0,RD,WH,RD,RD,WH,RD,GY,GY,GY,GY,GY,GY,WH],
+  [0,RD,WH,RD,RD,WH,RD,0,0,0,0,0,0,0],
+  [0,0,RD,RD,RD,RD,0,0,0,0,0,0,0,0],
+  [0,0,RD,0,0,RD,0,0,0,0,0,0,0,0],
+  [0,0,BR,0,0,BR,0,0,0,0,0,0,0,0],
+];
+
+// Egg Person
+const EGG_PIXELS = [
+  [0,0,WH,WH,WH,0,0],
+  [0,WH,WH,WH,WH,WH,0],
+  [WH,WH,BK,WH,BK,WH,WH],
+  [WH,WH,WH,WH,WH,WH,WH],
+  [WH,WH,RD,RD,RD,WH,WH],
+  [0,WH,WH,WH,WH,WH,0],
+  [0,0,YL,0,YL,0,0],
+];
+
+// Raccoon
+const RACCOON_PIXELS = [
+  [0,GY,0,0,0,GY,0],
+  [GY,GY,GY,GY,GY,GY,GY],
+  [GY,BK,GY,GY,GY,BK,GY],
+  [GY,GY,GY,BK,GY,GY,GY],
+  [0,DG,DG,DG,DG,DG,0],
+  [0,DG,0,DG,0,DG,0],
+  [0,0,0,BR,BR,BR,BR],
+];
+
+// Gatorade Lawyer
+const LAWYER_PIXELS = [
+  [0,0,BK,BK,BK,0,0],
+  [0,BK,SK,SK,SK,BK,0],
+  [0,SK,BK,SK,BK,SK,0],
+  [0,SK,SK,SK,SK,SK,0],
+  [0,DG,DG,DG,DG,DG,0],
+  [DG,DG,DG,DG,DG,DG,DG],
+  [0,DG,DG,DG,DG,DG,0],
+  [0,0,BK,0,BK,0,0],
+];
+
+// Sea Witch
+const WITCH_PIXELS = [
+  [0,0,PK,PK,PK,0,0],
+  [0,PK,PK,PK,PK,PK,0],
+  [PK,'#0F0',PK,PK,'#0F0',PK,0],
+  [PK,PK,PK,PK,PK,PK,0],
+  [0,'#808',PK,PK,PK,'#808',0],
+  ['#808','#808','#808','#808','#808','#808','#808'],
+  [0,'#808',0,'#808',0,'#808',0],
+];
+
+// Food-Stealing Doctor
+const DOCTOR_PIXELS = [
+  [0,0,WH,WH,WH,0,0],
+  [0,WH,SK,SK,SK,WH,0],
+  [0,SK,BK,SK,BK,SK,0],
+  [0,SK,SK,RD,SK,SK,0],
+  [WH,WH,WH,WH,WH,WH,WH],
+  [0,WH,RD,WH,WH,WH,0],
+  [0,WH,WH,WH,WH,WH,0],
+  [0,0,BK,0,BK,0,0],
+];
+
+// Large Marge (giant chicken)
+const CHICKEN_PIXELS = [
+  [0,0,RD,RD,0,0,0,0],
+  [0,WH,WH,WH,WH,0,0,0],
+  [WH,WH,BK,WH,WH,WH,0,0],
+  [WH,OR,OR,WH,WH,WH,WH,0],
+  [0,WH,WH,WH,WH,WH,WH,WH],
+  [0,0,WH,WH,WH,WH,WH,0],
+  [0,0,OR,0,0,OR,0,0],
+  [0,0,OR,0,0,OR,0,0],
+];
+
+// Chip from Gatorade (final boss)
+const CHIP_PIXELS = [
+  [0,OR,OR,OR,OR,OR,0,0],
+  [OR,OR,OR,OR,OR,OR,OR,0],
+  [OR,BK,OR,OR,BK,OR,OR,0],
+  [OR,OR,OR,RD,OR,OR,OR,0],
+  [GN,GN,GN,GN,GN,GN,GN,GN],
+  [GN,GN,WH,GN,GN,WH,GN,GN],
+  [GN,GN,GN,GN,GN,GN,GN,GN],
+  [0,GN,GN,GN,GN,GN,GN,0],
+  [0,0,BK,0,0,BK,0,0],
+  [0,0,BK,0,0,BK,0,0],
+];
+
+// Mrs. Palmeri
+const PALMERI_PIXELS = [
+  [0,BR,BR,BR,BR,BR,0],
+  [BR,BR,BR,BR,BR,BR,BR],
+  [0,SK,BK,SK,BK,SK,0],
+  [0,SK,SK,SK,SK,SK,0],
+  [0,SK,RD,RD,RD,SK,0],
+  [GN,GN,GN,GN,GN,GN,GN],
+  [0,GN,GN,GN,GN,GN,0],
+  [0,0,BR,0,BR,0,0],
+];
+
+// Danny DeVito
+const DEVITO_PIXELS = [
+  [0,0,BK,BK,0,0],
+  [0,SK,SK,SK,SK,0],
+  [0,SK,BK,BK,SK,0],
+  [0,SK,SK,SK,SK,0],
+  [RD,RD,RD,RD,RD,RD],
+  [0,RD,RD,RD,RD,0],
+  [0,0,BK,BK,0,0],
+];
+
+// Chili's building
+const CHILIS_PIXELS = [
+  [RD,RD,RD,RD,RD,RD,RD,RD,RD,RD],
+  [RD,WH,WH,WH,WH,WH,WH,WH,WH,RD],
+  [RD,WH,GN,WH,WH,WH,GN,WH,WH,RD],
+  [RD,WH,GN,GN,WH,GN,GN,WH,WH,RD],
+  [RD,WH,WH,RD,RD,RD,WH,WH,WH,RD],
+  [RD,WH,WH,RD,RD,RD,WH,WH,WH,RD],
+  [RD,WH,WH,WH,RD,WH,WH,WH,WH,RD],
+  [RD,RD,RD,RD,RD,RD,RD,RD,RD,RD],
+];
+
+// Zombocom terminal
+const TERMINAL_PIXELS = [
+  [DG,DG,DG,DG,DG,DG,DG,DG],
+  [DG,'#0F0','#0F0','#0F0','#0F0','#0F0','#0F0',DG],
+  [DG,'#0F0',BK,BK,BK,BK,'#0F0',DG],
+  [DG,'#0F0',BK,'#0F0','#0F0',BK,'#0F0',DG],
+  [DG,'#0F0',BK,BK,BK,BK,'#0F0',DG],
+  [DG,'#0F0','#0F0','#0F0','#0F0','#0F0','#0F0',DG],
+  [DG,DG,DG,DG,DG,DG,DG,DG],
+  [0,0,DG,DG,DG,DG,0,0],
+];
+
+// ========================================
+// GAME STATE
+// ========================================
+const GS = { TITLE: 0, INTRO: 1, SELECT: 2, PLAYING: 3, BOSS: 4, BONUS: 5, WIN: 6, GAMEOVER: 7, TRANSITION: 8, DEAD: 9 };
+let gameState = GS.TITLE;
+let selectedChar = 'matt';
+let level = 0;
+let score = 0;
+let titleBlink = 0;
+let introScroll = 0;
+let transitionTimer = 0;
+let transitionText = '';
+let shakeTimer = 0;
+let shakeIntensity = 0;
+let gameTime = 0;
+let deathTimer = 0;
+let comboCount = 0;
+let comboTimer = 0;
+
+// Quips
+const QUIPS = [
+  "All hail the Chili's!",
+  "I hate raccoons!",
+  "Anything is possible at Zombocom!",
+  "Raccoons took my eggs!",
+  "Is that a Presidente Margarita?",
+  "You can do anything at Zombocom!",
+  "The only limit is yourself!",
+  "Egg people are NOT people!",
+  "Danny taught me that move!",
+  "FOR ZOMBOCOM!",
+  "I need a margarita...",
+  "These eggs are HOSTILE!",
+  "Where's the nearest Chili's?",
+  "Zombocom dot com!",
+  "My sword is bigger!",
+  "That raccoon looked at me funny!",
+  "Try the Presidente Margarita!",
+  "Professional hopscotch pays the bills!",
+  "Dumpster Champion, baby!",
+  "Danny DeVito believes in us!",
+  "You just got Zombocom'd!",
+  "That's impossible! ...wait, no it's not.",
+  "50 raw eggs? Maybe next time.",
+];
+
+let quipTimer = 0;
+let currentQuip = '';
+
+// ========================================
+// LEVEL DEFINITIONS
+// ========================================
+const LEVELS = [
+  {
+    name: "The Burning Wreckage",
+    subtitle: "Survive the blimp crash zone",
+    bg: '#1a0a2e',
+    ground: '#2a1a0a',
+    accent: '#f64',
+    hasBlimp: true,
+    platforms: [
+      { x: 30, y: 490, w: 740, h: 20 },
+      { x: 80, y: 400, w: 130, h: 15 },
+      { x: 280, y: 360, w: 130, h: 15 },
+      { x: 480, y: 310, w: 130, h: 15 },
+      { x: 120, y: 260, w: 130, h: 15 },
+      { x: 340, y: 200, w: 150, h: 15 },
+      { x: 580, y: 220, w: 110, h: 15 },
+      { x: 40, y: 160, w: 110, h: 15 },
+      { x: 640, y: 130, w: 110, h: 15 },
+    ],
+    enemies: [
+      { type: 'egg', x: 320, y: 320 },
+      { type: 'egg', x: 520, y: 270 },
+      { type: 'egg', x: 160, y: 360 },
+      { type: 'raccoon', x: 380, y: 160 },
+      { type: 'egg', x: 620, y: 100 },
+    ],
+    items: [
+      { type: 'terminal', x: 130, y: 220 },
+      { type: 'chilis', x: 490, y: 268 },
+    ],
+    exit: { x: 670, y: 90 },
+  },
+  {
+    name: "Raccoon Alley",
+    subtitle: "The dumpster operatives await",
+    bg: '#0a1a0a',
+    ground: '#1a3a1a',
+    accent: '#6a6',
+    platforms: [
+      { x: 30, y: 490, w: 740, h: 20 },
+      { x: 0, y: 400, w: 160, h: 15 },
+      { x: 200, y: 370, w: 110, h: 15 },
+      { x: 380, y: 400, w: 140, h: 15 },
+      { x: 580, y: 350, w: 120, h: 15 },
+      { x: 90, y: 290, w: 140, h: 15 },
+      { x: 310, y: 260, w: 110, h: 15 },
+      { x: 500, y: 220, w: 130, h: 15 },
+      { x: 190, y: 170, w: 160, h: 15 },
+      { x: 440, y: 140, w: 110, h: 15 },
+      { x: 640, y: 170, w: 110, h: 15 },
+    ],
+    enemies: [
+      { type: 'raccoon', x: 40, y: 360 },
+      { type: 'raccoon', x: 240, y: 330 },
+      { type: 'raccoon', x: 420, y: 360 },
+      { type: 'raccoon', x: 600, y: 310 },
+      { type: 'egg', x: 330, y: 220 },
+      { type: 'raccoon', x: 220, y: 130 },
+      { type: 'egg', x: 460, y: 100 },
+    ],
+    items: [
+      { type: 'terminal', x: 510, y: 178 },
+      { type: 'chilis', x: 100, y: 248 },
+      { type: 'jetpack', x: 650, y: 130 },
+    ],
+    exit: { x: 460, y: 100 },
+  },
+  {
+    name: "Gatorade Corporate HQ",
+    subtitle: "Lawyers, witches, and corporate evil",
+    bg: '#0a0a2e',
+    ground: '#1a1a4a',
+    accent: '#66f',
+    platforms: [
+      { x: 30, y: 490, w: 740, h: 20 },
+      { x: 80, y: 400, w: 110, h: 15 },
+      { x: 260, y: 380, w: 130, h: 15 },
+      { x: 450, y: 350, w: 110, h: 15 },
+      { x: 610, y: 390, w: 140, h: 15 },
+      { x: 40, y: 300, w: 130, h: 15 },
+      { x: 240, y: 270, w: 140, h: 15 },
+      { x: 440, y: 240, w: 110, h: 15 },
+      { x: 610, y: 270, w: 130, h: 15 },
+      { x: 140, y: 190, w: 150, h: 15 },
+      { x: 370, y: 160, w: 130, h: 15 },
+      { x: 570, y: 150, w: 110, h: 15 },
+    ],
+    enemies: [
+      { type: 'lawyer', x: 290, y: 340 },
+      { type: 'lawyer', x: 470, y: 310 },
+      { type: 'egg', x: 640, y: 350 },
+      { type: 'lawyer', x: 260, y: 230 },
+      { type: 'witch', x: 460, y: 200 },
+      { type: 'doctor', x: 170, y: 150 },
+      { type: 'lawyer', x: 590, y: 110 },
+    ],
+    items: [
+      { type: 'terminal', x: 55, y: 258 },
+      { type: 'chilis', x: 380, y: 118 },
+      { type: 'margarita', x: 620, y: 230 },
+    ],
+    exit: { x: 590, y: 110 },
+  },
+  {
+    name: "Mrs. Palmeri's Chicken Farm",
+    subtitle: "BOSS: Mrs. Palmeri & Large Marge",
+    bg: '#2e1a0a',
+    ground: '#4a3a1a',
+    accent: '#fa0',
+    boss: 'palmeri',
+    platforms: [
+      { x: 20, y: 500, w: 760, h: 20 },
+      { x: 40, y: 400, w: 110, h: 15 },
+      { x: 240, y: 380, w: 130, h: 15 },
+      { x: 440, y: 400, w: 110, h: 15 },
+      { x: 640, y: 380, w: 110, h: 15 },
+      { x: 140, y: 300, w: 110, h: 15 },
+      { x: 340, y: 280, w: 130, h: 15 },
+      { x: 540, y: 300, w: 110, h: 15 },
+    ],
+    enemies: [],
+    items: [
+      { type: 'chilis', x: 150, y: 258 },
+    ],
+    exit: null,
+  },
+  {
+    name: "The Sea Witch Cove",
+    subtitle: "Magic and madness beneath the waves",
+    bg: '#0a1a3e',
+    ground: '#0a2a4a',
+    accent: '#a4f',
+    platforms: [
+      { x: 30, y: 490, w: 740, h: 20 },
+      { x: 0, y: 400, w: 140, h: 15 },
+      { x: 190, y: 360, w: 110, h: 15 },
+      { x: 370, y: 330, w: 120, h: 15 },
+      { x: 550, y: 370, w: 110, h: 15 },
+      { x: 90, y: 270, w: 130, h: 15 },
+      { x: 290, y: 240, w: 110, h: 15 },
+      { x: 490, y: 250, w: 130, h: 15 },
+      { x: 670, y: 220, w: 110, h: 15 },
+      { x: 190, y: 160, w: 140, h: 15 },
+      { x: 420, y: 140, w: 110, h: 15 },
+    ],
+    enemies: [
+      { type: 'witch', x: 210, y: 320 },
+      { type: 'witch', x: 390, y: 290 },
+      { type: 'witch', x: 570, y: 330 },
+      { type: 'egg', x: 110, y: 230 },
+      { type: 'witch', x: 310, y: 200 },
+      { type: 'raccoon', x: 510, y: 210 },
+      { type: 'witch', x: 690, y: 180 },
+      { type: 'doctor', x: 440, y: 100 },
+    ],
+    items: [
+      { type: 'terminal', x: 100, y: 228 },
+      { type: 'chilis', x: 680, y: 178 },
+      { type: 'jetpack', x: 200, y: 120 },
+    ],
+    exit: { x: 440, y: 100 },
+  },
+  {
+    name: "Chip's Gatorade Fortress",
+    subtitle: "FINAL BOSS: Chip from Gatorade",
+    bg: '#0a0a0a',
+    ground: '#1a2a1a',
+    accent: '#0f0',
+    boss: 'chip',
+    platforms: [
+      { x: 20, y: 500, w: 760, h: 20 },
+      { x: 40, y: 400, w: 130, h: 15 },
+      { x: 240, y: 380, w: 110, h: 15 },
+      { x: 440, y: 400, w: 130, h: 15 },
+      { x: 640, y: 370, w: 110, h: 15 },
+      { x: 90, y: 300, w: 140, h: 15 },
+      { x: 340, y: 270, w: 130, h: 15 },
+      { x: 540, y: 290, w: 120, h: 15 },
+      { x: 190, y: 200, w: 110, h: 15 },
+      { x: 440, y: 180, w: 110, h: 15 },
+    ],
+    enemies: [],
+    items: [
+      { type: 'chilis', x: 100, y: 258 },
+      { type: 'terminal', x: 550, y: 248 },
+      { type: 'margarita', x: 450, y: 140 },
+    ],
+    exit: null,
+  },
+];
+
+// ========================================
+// PLAYER
+// ========================================
+let player = {
+  x: 100, y: 400, vx: 0, vy: 0, w: 16, h: 24,
+  hp: 100, maxHp: 100, grounded: false, facing: 1,
+  attacking: false, attackTimer: 0, attackCooldown: 0,
+  invincible: 0, speedBoost: 0, jetpack: 0, dead: false,
+  jumpHeld: false, animFrame: 0, lives: 3,
+};
+
+function resetPlayer() {
+  player.x = 100; player.y = 400;
+  player.vx = 0; player.vy = 0;
+  player.hp = player.maxHp;
+  player.grounded = false; player.facing = 1;
+  player.attacking = false; player.attackTimer = 0;
+  player.attackCooldown = 0;
+  player.invincible = 0; player.speedBoost = 0;
+  player.jetpack = 0; player.dead = false;
+  player.animFrame = 0;
+}
+
+// ========================================
+// ENTITIES
+// ========================================
+let enemies = [];
+let particles = [];
+let items = [];
+let projectiles = [];
+let boss = null;
+let floatingTexts = [];
+let bgElements = []; // decorative background elements
+
+function spawnEnemy(type, x, y) {
+  const e = {
+    type, x, y,
+    vx: (Math.random() > 0.5 ? 1 : -1) * (type === 'raccoon' ? 2 : 1),
+    vy: 0, hp: 3, w: 14, h: 14, grounded: false, facing: 1, hitTimer: 0,
+    patrolMin: x - 70, patrolMax: x + 70, animFrame: 0,
+  };
+  if (type === 'lawyer') { e.hp = 5; e.vx *= 0.8; }
+  if (type === 'witch') { e.hp = 4; e.shootTimer = 60 + Math.random() * 60; }
+  if (type === 'doctor') { e.hp = 4; e.vx *= 1.5; e.stealCooldown = 0; }
+  if (type === 'raccoon') { e.hp = 3; }
+  enemies.push(e);
+}
+
+function spawnBoss(type) {
+  if (type === 'palmeri') {
+    boss = {
+      type: 'palmeri', phase: 'palmeri', x: 400, y: 340, w: 32, h: 32,
+      hp: 30, maxHp: 30, vx: 1.5, vy: 0, grounded: false, facing: -1,
+      hitTimer: 0, spawnTimer: 120, summonTimer: 200, active: true,
+    };
+  } else if (type === 'chip') {
+    boss = {
+      type: 'chip', x: 400, y: 240, w: 32, h: 40,
+      hp: 50, maxHp: 50, vx: 2, vy: 0, grounded: false, facing: -1,
+      hitTimer: 0, dashTimer: 180, shootTimer: 90, phase: 1, active: true,
+      quoteTimer: 300,
+    };
+  }
+}
+
+function spawnItem(type, x, y) {
+  items.push({ type, x, y, w: 20, h: 20, collected: false, bobTimer: Math.random() * Math.PI * 2 });
+}
+
+// ========================================
+// LEVEL LOADING
+// ========================================
+let platforms = [];
+let exitZone = null;
+
+function loadLevel(idx) {
+  if (idx >= LEVELS.length) {
+    gameState = GS.WIN;
+    return;
+  }
+  level = idx;
+  const lv = LEVELS[idx];
+  platforms = lv.platforms.map(p => ({ ...p }));
+  enemies = [];
+  items = [];
+  projectiles = [];
+  particles = [];
+  floatingTexts = [];
+  boss = null;
+  bgElements = [];
+
+  lv.enemies.forEach(e => spawnEnemy(e.type, e.x, e.y));
+  lv.items.forEach(i => spawnItem(i.type, i.x, i.y));
+
+  if (lv.boss) spawnBoss(lv.boss);
+
+  exitZone = lv.exit ? { x: lv.exit.x, y: lv.exit.y, w: 24, h: 32 } : null;
+  resetPlayer();
+
+  // Generate background decoration
+  for (let i = 0; i < 20; i++) {
+    bgElements.push({
+      x: Math.random() * W,
+      y: Math.random() * H * 0.8,
+      size: 1 + Math.random() * 2,
+      speed: 0.1 + Math.random() * 0.3,
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+
+  transitionText = lv.name;
+  transitionTimer = 150;
+  gameState = GS.TRANSITION;
+}
+
+// ========================================
+// COLLISION
+// ========================================
+function aabb(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function resolvePhysics(entity) {
+  const gravity = 0.5;
+  entity.vy += gravity;
+  if (entity.vy > 12) entity.vy = 12;
+  entity.x += entity.vx;
+  entity.y += entity.vy;
+  entity.grounded = false;
+
+  for (const p of platforms) {
+    if (entity.x + entity.w > p.x && entity.x < p.x + p.w) {
+      if (entity.y + entity.h > p.y && entity.y + entity.h < p.y + p.h + entity.vy + 2 && entity.vy >= 0) {
+        entity.y = p.y - entity.h;
+        entity.vy = 0;
+        entity.grounded = true;
+      }
+    }
+  }
+
+  if (entity.x < 0) entity.x = 0;
+  if (entity.x + entity.w > W) entity.x = W - entity.w;
+  if (entity.y > H + 50) {
+    if (entity === player) player.hp = 0;
+  }
+}
+
+// ========================================
+// PARTICLES & FX
+// ========================================
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 5,
+      vy: (Math.random() - 0.5) * 5 - 2,
+      life: 20 + Math.random() * 25,
+      color,
+      size: 2 + Math.random() * 3,
+    });
+  }
+}
+
+function addFloatingText(x, y, text, color = '#FFF') {
+  floatingTexts.push({ x, y, text, color, life: 70, vy: -1.2 });
+}
+
+// ========================================
+// SOUND (Chiptune beep synth)
+// ========================================
+let audioCtx;
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+function beep(freq, dur, vol = 0.08, type = 'square') {
+  if (!audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.value = vol;
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + dur);
+  } catch(e) {}
+}
+function sfxJump() { beep(330, 0.08); setTimeout(() => beep(530, 0.08), 30); }
+function sfxHit() { beep(100, 0.12, 0.12); }
+function sfxPickup() { beep(600, 0.06); setTimeout(() => beep(900, 0.08), 40); }
+function sfxAttack() { beep(150, 0.06, 0.08, 'sawtooth'); }
+function sfxBossHit() { beep(80, 0.18, 0.12); }
+function sfxHeal() { beep(400, 0.08); setTimeout(() => beep(600, 0.08), 50); setTimeout(() => beep(800, 0.1), 100); }
+function sfxDeath() { beep(200, 0.15); setTimeout(() => beep(150, 0.15), 100); setTimeout(() => beep(80, 0.3), 200); }
+function sfxCombo() { beep(500, 0.05); setTimeout(() => beep(700, 0.05), 30); setTimeout(() => beep(1000, 0.08), 60); }
+function sfxSteal() { beep(300, 0.1, 0.1, 'sawtooth'); setTimeout(() => beep(200, 0.15, 0.1, 'sawtooth'), 80); }
+
+// ========================================
+// TITLE SCREEN
+// ========================================
+function updateTitle() {
+  titleBlink += 0.05;
+  if (consumeKey('Enter') || consumeKey('Space')) {
+    initAudio();
+    gameState = GS.INTRO;
+    introScroll = 0;
+  }
+}
+
+function drawTitle() {
+  ctx.fillStyle = '#0a0a1e';
+  ctx.fillRect(0, 0, W, H);
+
+  // Animated stars
+  for (let i = 0; i < 60; i++) {
+    const sx = (i * 137 + 50) % W;
+    const sy = (i * 97 + 30) % H;
+    ctx.fillStyle = `rgba(255,255,255,${0.3 + Math.sin(titleBlink + i) * 0.3})`;
+    ctx.fillRect(sx, sy, 2, 2);
+  }
+
+  // Burning blimp wreckage in background
+  const blimpX = W / 2 - 60 + Math.sin(titleBlink * 0.3) * 5;
+  ctx.fillStyle = '#555';
+  ctx.beginPath();
+  ctx.ellipse(blimpX, 350, 60, 25, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  // Flames
+  for (let i = 0; i < 6; i++) {
+    const fx = blimpX - 30 + i * 12;
+    const fh = 10 + Math.sin(titleBlink * 3 + i * 2) * 8;
+    ctx.fillStyle = i % 2 === 0 ? '#F60' : '#FF0';
+    ctx.fillRect(fx, 335 - fh, 8, fh);
+  }
+
+  // Title
+  ctx.fillStyle = '#FF0';
+  ctx.font = 'bold 44px monospace';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = '#F90';
+  ctx.shadowBlur = 10;
+  ctx.fillText('EGG CLIMBERS', W/2, 130);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#F90';
+  ctx.font = 'bold 22px monospace';
+  ctx.fillText('THE ZOMBOCOM SAGA', W/2, 165);
+
+  // Characters walking from blimp
+  drawPixelArt(W/2 - 60, 400, MATT_STAND, 3);
+  drawPixelArt(W/2 + 20, 400, JOHN_STAND, 3);
+
+  // Blink text
+  if (Math.sin(titleBlink * 2) > 0) {
+    ctx.fillStyle = '#FFF';
+    ctx.font = '18px monospace';
+    ctx.fillText('PRESS ENTER OR SPACE TO START', W/2, 490);
+  }
+
+  // Credits
+  ctx.fillStyle = '#666';
+  ctx.font = '11px monospace';
+  ctx.fillText('A ZOMBOCOM PRODUCTION — YOU CAN DO ANYTHING AT ZOMBOCOM', W/2, 530);
+  ctx.fillText('CREATIVE DIRECTORS: MATT (.moejontana) & JOHN (jkclancey7)', W/2, 548);
+  ctx.fillStyle = '#555';
+  ctx.fillText('ARROWS/WASD: MOVE | SPACE/UP/W: JUMP | Z/K: ATTACK | X/L: INTERACT', W/2, 575);
+}
+
+// ========================================
+// INTRO CRAWL
+// ========================================
+const INTRO_TEXT = [
+  "",
+  "A long time ago, in a Zombocom far, far away...",
+  "",
+  "",
+  "The blimp was on fire.",
+  "",
+  "Matt and John walked away from the wreckage,",
+  "their t-shirts singed but their spirits unbroken.",
+  "",
+  "Matt, professional hopscotch player,",
+  "3x MVP of the Seattle Cups of Water.",
+  "",
+  "John, Zombocom philosopher,",
+  "the one true Dumpster Champion.",
+  "",
+  "In a small dojo in the mountains,",
+  "DANNY DEVITO taught them the ancient",
+  "art of Egg Combat.",
+  "",
+  "\"The eggs are rising,\" Danny said,",
+  "adjusting his headband.",
+  "",
+  "\"They declared something is IMPOSSIBLE",
+  "at Zombocom. This cannot stand.\"",
+  "",
+  "\"But at Zombocom, you can do anything.\"",
+  "\"The only limit is yourself.\"",
+  "",
+  "Matt gripped his katana.",
+  "John raised his claymore.",
+  "",
+  "\"Let's crack some eggs.\"",
+  "",
+  "",
+  "And so the saga begins...",
+  "",
+  "",
+  "PRESS ENTER TO CONTINUE",
+];
+
+function updateIntro() {
+  introScroll += 0.6;
+  if (consumeKey('Enter') || consumeKey('Space')) {
+    if (introScroll > 30) {
+      gameState = GS.SELECT;
+    }
+  }
+}
+
+function drawIntro() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+
+  for (let i = 0; i < INTRO_TEXT.length; i++) {
+    const y = H - introScroll + i * 25;
+    if (y > -20 && y < H + 20) {
+      const fade = Math.min(1, Math.max(0, 1 - Math.abs(y - H/2) / (H * 0.45)));
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = INTRO_TEXT[i].startsWith('"') ? '#0F0' : '#FF0';
+      ctx.font = INTRO_TEXT[i].includes('DANNY') || INTRO_TEXT[i].includes('IMPOSSIBLE') ? 'bold 16px monospace' : '15px monospace';
+      ctx.fillText(INTRO_TEXT[i], W/2, y);
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // Skip hint
+  ctx.fillStyle = '#555';
+  ctx.font = '11px monospace';
+  ctx.fillText('PRESS ENTER TO SKIP', W/2, H - 15);
+}
+
+// ========================================
+// CHARACTER SELECT
+// ========================================
+function updateSelect() {
+  if (keys['ArrowLeft'] || keys['KeyA']) { selectedChar = 'matt'; }
+  if (keys['ArrowRight'] || keys['KeyD']) { selectedChar = 'john'; }
+  if (consumeKey('Enter') || consumeKey('Space')) {
+    player.lives = 3;
+    score = 0;
+    loadLevel(0);
+  }
+}
+
+function drawSelect() {
+  ctx.fillStyle = '#1a0a2e';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = '#FF0';
+  ctx.font = 'bold 30px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('CHOOSE YOUR WARRIOR', W/2, 70);
+
+  // Matt panel
+  const mattX = W/4;
+  const mattSel = selectedChar === 'matt';
+  if (mattSel) {
+    ctx.strokeStyle = '#FF0';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(mattX - 70, 100, 140, 300);
+    ctx.fillStyle = 'rgba(255,255,0,0.05)';
+    ctx.fillRect(mattX - 70, 100, 140, 300);
+  }
+  drawPixelArt(mattX - 16, 130, MATT_STAND, 4);
+  ctx.fillStyle = '#FFF';
+  ctx.font = 'bold 22px monospace';
+  ctx.fillText('MATT', mattX, 230);
+  ctx.font = '13px monospace';
+  ctx.fillStyle = '#AAA';
+  ctx.fillText('Weapon: Katana', mattX, 255);
+  ctx.fillText('Speed: ★★★★★', mattX, 275);
+  ctx.fillText('Power: ★★★☆☆', mattX, 295);
+  ctx.fillStyle = '#888';
+  ctx.font = '11px monospace';
+  ctx.fillText('3x MVP Hopscotch', mattX, 320);
+  ctx.fillText('Seattle Cups of Water', mattX, 336);
+  ctx.fillText('"Fast & sleek"', mattX, 360);
+
+  // John panel
+  const johnX = 3*W/4;
+  const johnSel = selectedChar === 'john';
+  if (johnSel) {
+    ctx.strokeStyle = '#FF0';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(johnX - 70, 100, 140, 300);
+    ctx.fillStyle = 'rgba(255,255,0,0.05)';
+    ctx.fillRect(johnX - 70, 100, 140, 300);
+  }
+  drawPixelArt(johnX - 16, 130, JOHN_STAND, 4);
+  ctx.fillStyle = '#FFF';
+  ctx.font = 'bold 22px monospace';
+  ctx.fillText('JOHN', johnX, 230);
+  ctx.font = '13px monospace';
+  ctx.fillStyle = '#AAA';
+  ctx.fillText('Weapon: Claymore', johnX, 255);
+  ctx.fillText('Speed: ★★★☆☆', johnX, 275);
+  ctx.fillText('Power: ★★★★★', johnX, 295);
+  ctx.fillStyle = '#888';
+  ctx.font = '11px monospace';
+  ctx.fillText('Zombocom Philosopher', johnX, 320);
+  ctx.fillText('Dumpster Champion', johnX, 336);
+  ctx.fillText('"The Highlander"', johnX, 360);
+
+  // Danny DeVito in center
+  drawPixelArt(W/2 - 12, 430, DEVITO_PIXELS, 4);
+  ctx.fillStyle = '#FF0';
+  ctx.font = '14px monospace';
+  ctx.fillText('"I trained them well." — Danny DeVito', W/2, 530);
+
+  ctx.fillStyle = '#666';
+  ctx.font = '13px monospace';
+  ctx.fillText('← → TO SELECT  |  ENTER TO BEGIN', W/2, 570);
+}
+
+// ========================================
+// TRANSITION SCREEN
+// ========================================
+function updateTransition() {
+  transitionTimer--;
+  if (transitionTimer <= 0) {
+    gameState = LEVELS[level].boss ? GS.BOSS : GS.PLAYING;
+  }
+  if (transitionTimer < 120 && (consumeKey('Enter') || consumeKey('Space'))) {
+    gameState = LEVELS[level].boss ? GS.BOSS : GS.PLAYING;
+  }
+}
+
+function drawTransition() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  const progress = 1 - transitionTimer / 150;
+
+  ctx.fillStyle = LEVELS[level].accent || '#FF0';
+  ctx.font = 'bold 36px monospace';
+  ctx.textAlign = 'center';
+  ctx.globalAlpha = Math.min(1, progress * 3);
+  ctx.fillText(`LEVEL ${level + 1}`, W/2, H/2 - 40);
+
+  ctx.fillStyle = '#FFF';
+  ctx.font = '22px monospace';
+  ctx.fillText(transitionText, W/2, H/2 + 5);
+
+  if (LEVELS[level].subtitle) {
+    ctx.fillStyle = '#AAA';
+    ctx.font = '14px monospace';
+    ctx.fillText(LEVELS[level].subtitle, W/2, H/2 + 35);
+  }
+
+  if (LEVELS[level].boss) {
+    ctx.fillStyle = '#F00';
+    ctx.font = 'bold 18px monospace';
+    const flash = Math.sin(Date.now() / 200) > 0;
+    if (flash) ctx.fillText('⚠ BOSS BATTLE ⚠', W/2, H/2 + 70);
+  }
+
+  // Lives display
+  ctx.fillStyle = '#888';
+  ctx.font = '12px monospace';
+  ctx.fillText(`Lives: ${'♥'.repeat(player.lives)}  |  Score: ${score}`, W/2, H/2 + 110);
+
+  ctx.globalAlpha = 1;
+}
+
+// ========================================
+// MAIN GAME UPDATE
+// ========================================
+function updateGame() {
+  gameTime++;
+
+  if (player.dead) {
+    deathTimer++;
+    if (deathTimer > 60 && (consumeKey('Enter') || consumeKey('Space'))) {
+      player.lives--;
+      if (player.lives <= 0) {
+        gameState = GS.GAMEOVER;
+      } else {
+        deathTimer = 0;
+        resetPlayer();
+        player.invincible = 120;
+      }
+    }
+    return;
+  }
+
+  // Player movement
+  const baseSpeed = selectedChar === 'matt' ? 3.5 : 2.8;
+  const speedMul = player.speedBoost > 0 ? 1.5 : 1;
+
+  if (keys['ArrowLeft'] || keys['KeyA']) {
+    player.vx = -baseSpeed * speedMul;
+    player.facing = -1;
+    player.animFrame += 0.2;
+  } else if (keys['ArrowRight'] || keys['KeyD']) {
+    player.vx = baseSpeed * speedMul;
+    player.facing = 1;
+    player.animFrame += 0.2;
+  } else {
+    player.vx *= 0.7;
+    player.animFrame = 0;
+  }
+
+  // Jump
+  if ((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && player.grounded && !player.jumpHeld) {
+    player.vy = -10.5;
+    player.grounded = false;
+    player.jumpHeld = true;
+    sfxJump();
+  }
+  if (!(keys['Space'] || keys['ArrowUp'] || keys['KeyW'])) {
+    player.jumpHeld = false;
+    // Variable jump height: cut velocity when key released
+    if (player.vy < -3) player.vy = -3;
+  }
+
+  // Jetpack
+  if (player.jetpack > 0) {
+    if (keys['Space'] || keys['ArrowUp'] || keys['KeyW']) {
+      player.vy = Math.max(player.vy - 0.8, -5);
+      if (Math.random() > 0.4) {
+        spawnParticles(player.x + player.w/2, player.y + player.h, '#F90', 1);
+      }
+    }
+    player.jetpack--;
+    if (player.jetpack <= 0) addFloatingText(player.x, player.y, 'Jetpack Empty!', '#F90');
+  }
+
+  // Attack
+  if ((keys['KeyZ'] || keys['KeyK']) && player.attackCooldown <= 0) {
+    player.attacking = true;
+    player.attackTimer = selectedChar === 'matt' ? 12 : 18;
+    player.attackCooldown = selectedChar === 'matt' ? 18 : 30;
+    sfxAttack();
+  }
+
+  if (player.attackTimer > 0) player.attackTimer--;
+  else player.attacking = false;
+  if (player.attackCooldown > 0) player.attackCooldown--;
+
+  // Buff timers
+  if (player.invincible > 0) player.invincible--;
+  if (player.speedBoost > 0) player.speedBoost--;
+
+  // Combo timer
+  if (comboTimer > 0) comboTimer--;
+  else comboCount = 0;
+
+  resolvePhysics(player);
+
+  // Attack hitbox
+  if (player.attacking && player.attackTimer > (selectedChar === 'matt' ? 6 : 10)) {
+    const atkRange = selectedChar === 'matt' ? 28 : 42;
+    const atkBox = {
+      x: player.facing > 0 ? player.x + player.w : player.x - atkRange,
+      y: player.y + 2,
+      w: atkRange,
+      h: player.h - 4,
+    };
+
+    for (const e of enemies) {
+      if (e.hp > 0 && e.hitTimer <= 0 && aabb(atkBox, e)) {
+        const dmg = selectedChar === 'matt' ? 1 : 2;
+        e.hp -= dmg;
+        e.hitTimer = 12;
+        e.vx = player.facing * 4;
+        e.vy = -3;
+        sfxHit();
+        spawnParticles(e.x + e.w/2, e.y + e.h/2, '#FF0', 5);
+
+        if (e.hp <= 0) {
+          comboCount++;
+          comboTimer = 90;
+          const pts = 100 * Math.min(comboCount, 5);
+          score += pts;
+          spawnParticles(e.x + e.w/2, e.y + e.h/2, '#F00', 12);
+          addFloatingText(e.x, e.y, comboCount > 1 ? `+${pts} x${comboCount}!` : `+${pts}`, '#FF0');
+          if (comboCount >= 3) sfxCombo();
+          maybeQuip();
+        }
+      }
+    }
+
+    // Boss hit
+    if (boss && boss.active && boss.hitTimer <= 0 && aabb(atkBox, boss)) {
+      const dmg = selectedChar === 'matt' ? 1 : 2;
+      boss.hp -= dmg;
+      boss.hitTimer = 10;
+      sfxBossHit();
+      spawnParticles(boss.x + boss.w/2, boss.y + boss.h/2, '#FF0', 6);
+      shakeTimer = 5;
+      shakeIntensity = 3;
+      if (boss.hp <= 0) {
+        score += 2000;
+        spawnParticles(boss.x + boss.w/2, boss.y + boss.h/2, '#F90', 40);
+        addFloatingText(boss.x, boss.y, '+2000 BOSS DOWN!', '#FF0');
+        boss.active = false;
+        shakeTimer = 30;
+        shakeIntensity = 6;
+        setTimeout(() => {
+          if (level + 1 >= LEVELS.length) {
+            gameState = GS.WIN;
+          } else {
+            loadLevel(level + 1);
+          }
+        }, 2500);
+      }
+    }
+  }
+
+  // Enemy AI
+  for (const e of enemies) {
+    if (e.hp <= 0) continue;
+    if (e.hitTimer > 0) { e.hitTimer--; resolvePhysics(e); continue; }
+
+    e.animFrame += 0.1;
+
+    // Patrol
+    if (e.grounded) {
+      if (e.x <= e.patrolMin) e.vx = Math.abs(e.vx);
+      if (e.x >= e.patrolMax) e.vx = -Math.abs(e.vx);
+    }
+    e.facing = e.vx > 0 ? 1 : -1;
+
+    // Witch shooting
+    if (e.type === 'witch' && e.shootTimer !== undefined) {
+      e.shootTimer--;
+      if (e.shootTimer <= 0) {
+        const dx = player.x - e.x;
+        const dy = player.y - e.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 300 && dist > 10) {
+          projectiles.push({
+            x: e.x + e.w/2, y: e.y + e.h/2,
+            vx: (dx/dist) * 3, vy: (dy/dist) * 3,
+            life: 120, color: '#F0F', size: 4, type: 'magic',
+          });
+          spawnParticles(e.x + e.w/2, e.y + e.h/2, '#F0F', 3);
+        }
+        e.shootTimer = 80 + Math.random() * 60;
+      }
+    }
+
+    // Doctor special: steals power-ups on contact
+    if (e.type === 'doctor') {
+      if (e.stealCooldown > 0) e.stealCooldown--;
+      // Doctors chase the player when nearby
+      const ddx = player.x - e.x;
+      if (Math.abs(ddx) < 200) {
+        e.vx = ddx > 0 ? 2 : -2;
+      }
+    }
+
+    resolvePhysics(e);
+
+    // Contact damage
+    if (e.hp > 0 && player.invincible <= 0 && aabb(player, e)) {
+      // Doctor steals buffs!
+      if (e.type === 'doctor' && e.stealCooldown <= 0) {
+        let stolen = false;
+        if (player.speedBoost > 0) { player.speedBoost = 0; stolen = true; }
+        else if (player.invincible > 60) { player.invincible = 0; stolen = true; }
+        else if (player.jetpack > 0) { player.jetpack = 0; stolen = true; }
+
+        if (stolen) {
+          addFloatingText(e.x, e.y - 10, 'STOLEN!', '#F00');
+          sfxSteal();
+          e.stealCooldown = 120;
+        }
+      }
+
+      const dmg = e.type === 'doctor' ? 8 : (e.type === 'lawyer' ? 12 : 10);
+      player.hp -= dmg;
+      player.invincible = 60;
+      player.vy = -5;
+      player.vx = (player.x < e.x ? -4 : 4);
+      sfxHit();
+      shakeTimer = 5;
+      shakeIntensity = 3;
+      if (player.hp <= 0) {
+        player.dead = true;
+        deathTimer = 0;
+        sfxDeath();
+      }
+    }
+  }
+
+  // Remove dead enemies
+  enemies = enemies.filter(e => e.hp > 0 || e.hitTimer > 0);
+
+  // Projectiles
+  for (const p of projectiles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+    if (player.invincible <= 0 && !player.dead &&
+        Math.abs(p.x - player.x - player.w/2) < 10 &&
+        Math.abs(p.y - player.y - player.h/2) < 12) {
+      player.hp -= p.type === 'gatorade' ? 12 : 8;
+      player.invincible = 30;
+      p.life = 0;
+      sfxHit();
+      spawnParticles(player.x + player.w/2, player.y + player.h/2, p.color, 5);
+      if (player.hp <= 0) {
+        player.dead = true;
+        deathTimer = 0;
+        sfxDeath();
+      }
+    }
+  }
+  projectiles = projectiles.filter(p => p.life > 0 && p.x > -10 && p.x < W + 10 && p.y > -10 && p.y < H + 10);
+
+  // Boss update
+  if (boss && boss.active) updateBoss();
+
+  // Items
+  for (const item of items) {
+    if (item.collected) continue;
+    item.bobTimer += 0.05;
+    const itemBob = { x: item.x, y: item.y - 2 + Math.sin(item.bobTimer) * 3, w: item.w, h: item.h };
+    if (!aabb(player, itemBob)) continue;
+
+    if (item.type === 'terminal') {
+      if (keys['KeyX'] || keys['KeyL']) {
+        item.collected = true;
+        sfxPickup();
+        addFloatingText(item.x, item.y - 10, 'THE ONLY LIMIT IS YOURSELF', '#0F0');
+        const buffs = ['Speed Boost!', 'Egg Magnet!', 'Raccoon Repellent!', 'Margarita Shield!'];
+        const buff = buffs[Math.floor(Math.random() * buffs.length)];
+        setTimeout(() => addFloatingText(item.x, item.y - 25, buff, '#FF0'), 500);
+        if (buff.includes('Speed')) player.speedBoost = 360;
+        else if (buff.includes('Margarita') || buff.includes('Shield')) player.invincible = 360;
+        else if (buff.includes('Raccoon')) {
+          enemies.forEach(e => { if (e.type === 'raccoon') { e.hp = 0; spawnParticles(e.x, e.y, '#0F0', 8); } });
+          addFloatingText(player.x, player.y, 'Raccoons GONE!', '#0F0');
+        } else {
+          // Egg Magnet: pull all eggs toward player briefly (they take damage)
+          enemies.forEach(e => {
+            if (e.type === 'egg') {
+              e.vx = (player.x - e.x) > 0 ? 5 : -5;
+              e.vy = -4;
+            }
+          });
+        }
+        score += 50;
+        keys['KeyX'] = false; keys['KeyL'] = false;
+      }
+    } else if (item.type === 'chilis') {
+      if (keys['KeyX'] || keys['KeyL']) {
+        const heal = 50;
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        item.collected = true;
+        sfxHeal();
+        addFloatingText(item.x, item.y - 5, `+${heal} HP!`, '#0F0');
+        spawnParticles(item.x + item.w/2, item.y, '#0F0', 10);
+        maybeQuip("All hail the Chili's!");
+        score += 25;
+        keys['KeyX'] = false; keys['KeyL'] = false;
+      }
+    } else if (item.type === 'jetpack') {
+      item.collected = true;
+      player.jetpack = 240;
+      sfxPickup();
+      addFloatingText(item.x, item.y - 5, 'JANKY JETPACK!', '#F90');
+      score += 50;
+    } else if (item.type === 'margarita') {
+      item.collected = true;
+      player.invincible = 360;
+      player.hp = Math.min(player.maxHp, player.hp + 20);
+      sfxPickup();
+      addFloatingText(item.x, item.y - 5, 'GALLON MARGARITA!', '#0FF');
+      spawnParticles(item.x + item.w/2, item.y, '#0FF', 15);
+      maybeQuip("Is that a Presidente Margarita?");
+      score += 75;
+    }
+  }
+
+  // Exit check
+  if (exitZone && enemies.filter(e => e.hp > 0).length === 0) {
+    if (aabb(player, exitZone)) {
+      if (level === 2) {
+        // Bonus stage after Gatorade Corporate HQ
+        gameState = GS.BONUS;
+        bonusTimer = 360;
+        bonusScore = 0;
+        bonusItems = [];
+        for (let i = 0; i < 20; i++) {
+          bonusItems.push({
+            x: 50 + Math.random() * 700,
+            y: 80 + Math.random() * 420,
+            collected: false,
+            type: Math.random() > 0.4 ? 'egg' : 'food',
+            bobPhase: Math.random() * Math.PI * 2,
+          });
+        }
+      } else {
+        loadLevel(level + 1);
+      }
+    }
+  }
+
+  // Update particles
+  particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--; });
+  particles = particles.filter(p => p.life > 0);
+
+  // Update floating texts
+  floatingTexts.forEach(t => { t.y += t.vy; t.life--; });
+  floatingTexts = floatingTexts.filter(t => t.life > 0);
+
+  // Quip timer
+  if (quipTimer > 0) quipTimer--;
+
+  // Shake timer
+  if (shakeTimer > 0) shakeTimer--;
+
+  // Random quip every ~15 seconds
+  if (gameTime % 900 === 0 && !player.dead) maybeQuip();
+
+  // HP check
+  if (player.hp <= 0 && !player.dead) {
+    player.dead = true;
+    deathTimer = 0;
+    sfxDeath();
+  }
+}
+
+// ========================================
+// BOSS AI
+// ========================================
+function updateBoss() {
+  if (!boss || !boss.active) return;
+  boss.hitTimer = Math.max(0, boss.hitTimer - 1);
+
+  if (boss.type === 'palmeri') {
+    boss.x += boss.vx;
+    if (boss.x < 80 || boss.x > 660) boss.vx *= -1;
+    boss.facing = boss.vx > 0 ? 1 : -1;
+    resolvePhysics(boss);
+
+    // Phase transition at half health: becomes Large Marge
+    if (boss.hp < boss.maxHp / 2 && boss.phase === 'palmeri') {
+      boss.phase = 'marge';
+      boss.vx *= 1.8;
+      addFloatingText(boss.x, boss.y - 20, 'LARGE MARGE AWAKENS!', '#F00');
+      shakeTimer = 20;
+      shakeIntensity = 5;
+      spawnParticles(boss.x + boss.w/2, boss.y, '#F90', 20);
+    }
+
+    // Spawn egg minions
+    boss.spawnTimer--;
+    if (boss.spawnTimer <= 0) {
+      spawnEnemy('egg', boss.x + (Math.random() - 0.5) * 60, boss.y - 30);
+      boss.spawnTimer = boss.phase === 'marge' ? 60 + Math.random() * 40 : 100 + Math.random() * 60;
+      addFloatingText(boss.x, boss.y - 20, 'BAWK!', '#FF0');
+    }
+
+    // Contact damage
+    if (player.invincible <= 0 && !player.dead && aabb(player, boss)) {
+      player.hp -= 15;
+      player.invincible = 60;
+      player.vy = -6;
+      player.vx = (player.x < boss.x ? -5 : 5);
+      sfxHit();
+      shakeTimer = 8;
+      shakeIntensity = 5;
+      if (player.hp <= 0) { player.dead = true; deathTimer = 0; sfxDeath(); }
+    }
+  }
+
+  if (boss.type === 'chip') {
+    boss.x += boss.vx;
+    if (boss.x < 50 || boss.x > 700) boss.vx *= -1;
+    boss.facing = boss.vx > 0 ? 1 : -1;
+    resolvePhysics(boss);
+
+    // Phase 2 at half health
+    if (boss.hp < boss.maxHp / 2 && boss.phase === 1) {
+      boss.phase = 2;
+      boss.vx *= 1.5;
+      addFloatingText(boss.x, boss.y - 20, 'MAXIMUM HYDRATION!', '#0F0');
+      shakeTimer = 15;
+      shakeIntensity = 5;
+      spawnEnemy('lawyer', 200, 350);
+      spawnEnemy('lawyer', 600, 350);
+    }
+
+    // Chip's quips
+    if (boss.quoteTimer !== undefined) {
+      boss.quoteTimer--;
+      if (boss.quoteTimer <= 0) {
+        const chipQuips = [
+          'HYDRATE OR DIE!',
+          'GATORADE IS LAW!',
+          'YOU CANNOT DEFEAT CORPORATE!',
+          'MY LAWYERS WILL HEAR ABOUT THIS!',
+          'IS IT IN YOU? ...PAIN!',
+        ];
+        addFloatingText(boss.x, boss.y - 20, chipQuips[Math.floor(Math.random() * chipQuips.length)], '#0F0');
+        boss.quoteTimer = 180 + Math.random() * 120;
+      }
+    }
+
+    // Shoot Gatorade bottles
+    boss.shootTimer--;
+    if (boss.shootTimer <= 0) {
+      const dx = player.x - boss.x;
+      const dy = player.y - boss.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist > 10) {
+        projectiles.push({
+          x: boss.x + boss.w/2, y: boss.y + boss.h/2,
+          vx: (dx/dist) * 4, vy: (dy/dist) * 4,
+          life: 100, color: '#0F0', size: 5, type: 'gatorade',
+        });
+        if (boss.phase === 2) {
+          // Triple shot in phase 2
+          const angle = Math.atan2(dy, dx);
+          for (const offset of [-0.3, 0.3]) {
+            projectiles.push({
+              x: boss.x + boss.w/2, y: boss.y + boss.h/2,
+              vx: Math.cos(angle + offset) * 4, vy: Math.sin(angle + offset) * 4,
+              life: 100, color: '#0F0', size: 4, type: 'gatorade',
+            });
+          }
+        }
+      }
+      boss.shootTimer = boss.phase === 2 ? 35 : 55;
+    }
+
+    // Dash attack
+    boss.dashTimer--;
+    if (boss.dashTimer <= 0) {
+      boss.vx = (player.x > boss.x ? 9 : -9);
+      boss.dashTimer = 100 + Math.random() * 60;
+      addFloatingText(boss.x, boss.y - 10, 'CHARGE!', OR);
+      spawnParticles(boss.x + boss.w/2, boss.y + boss.h/2, GN, 8);
+    }
+
+    // Contact damage
+    if (player.invincible <= 0 && !player.dead && aabb(player, boss)) {
+      player.hp -= 20;
+      player.invincible = 60;
+      player.vy = -7;
+      player.vx = (player.x < boss.x ? -6 : 6);
+      sfxHit();
+      shakeTimer = 10;
+      shakeIntensity = 6;
+      if (player.hp <= 0) { player.dead = true; deathTimer = 0; sfxDeath(); }
+    }
+  }
+}
+
+// ========================================
+// BONUS STAGE: THE CHILI'S DUMPSTER
+// ========================================
+let bonusTimer = 0, bonusScore = 0, bonusItems = [];
+
+function updateBonus() {
+  bonusTimer--;
+  gameTime++;
+
+  const speed = 4.5;
+  if (keys['ArrowLeft'] || keys['KeyA']) player.x -= speed;
+  if (keys['ArrowRight'] || keys['KeyD']) player.x += speed;
+  if (keys['ArrowUp'] || keys['KeyW']) player.y -= speed;
+  if (keys['ArrowDown'] || keys['KeyS']) player.y += speed;
+  player.x = Math.max(0, Math.min(W - player.w, player.x));
+  player.y = Math.max(50, Math.min(H - player.h, player.y));
+
+  for (const item of bonusItems) {
+    if (!item.collected && Math.abs(player.x - item.x) < 16 && Math.abs(player.y - item.y) < 16) {
+      item.collected = true;
+      bonusScore += item.type === 'food' ? 200 : 50;
+      sfxPickup();
+      spawnParticles(item.x, item.y, item.type === 'food' ? '#0F0' : '#FF0', 6);
+    }
+  }
+
+  // Update particles
+  particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.life--; });
+  particles = particles.filter(p => p.life > 0);
+
+  if (bonusTimer <= 0 || bonusItems.every(i => i.collected)) {
+    score += bonusScore;
+    loadLevel(level + 1);
+  }
+}
+
+function drawBonus() {
+  // Dumpster green background
+  ctx.fillStyle = '#1a2a0a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Dumpster walls
+  ctx.strokeStyle = '#4a6a2a';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(10, 45, W - 20, H - 55);
+
+  // Title
+  ctx.fillStyle = '#FF0';
+  ctx.font = 'bold 22px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText("BONUS: THE CHILI'S DUMPSTER DIVE!", W/2, 30);
+
+  // Timer and score
+  const timeLeft = Math.ceil(bonusTimer / 60);
+  ctx.fillStyle = timeLeft <= 3 ? '#F00' : '#FFF';
+  ctx.font = '16px monospace';
+  ctx.fillText(`Time: ${timeLeft}s  |  Bonus: ${bonusScore}`, W/2, H - 10);
+
+  // Draw raccoon decorations
+  for (let i = 0; i < 4; i++) {
+    const rx = 80 + i * 200;
+    const ry = 60 + Math.sin(gameTime * 0.03 + i) * 5;
+    drawPixelArt(rx, ry, RACCOON_PIXELS, 1.5);
+  }
+
+  // Draw items
+  for (const item of bonusItems) {
+    if (item.collected) continue;
+    const bob = Math.sin(gameTime * 0.05 + item.bobPhase) * 3;
+    if (item.type === 'food') {
+      ctx.fillStyle = '#8B4';
+      ctx.fillRect(item.x - 1, item.y + bob - 1, 12, 12);
+      ctx.fillStyle = '#FF0';
+      ctx.fillRect(item.x + 1, item.y + bob + 1, 8, 3);
+      ctx.fillStyle = '#F80';
+      ctx.fillRect(item.x + 1, item.y + bob + 4, 8, 3);
+      ctx.fillStyle = '#F00';
+      ctx.fillRect(item.x + 1, item.y + bob + 7, 8, 3);
+    } else {
+      ctx.fillStyle = '#FFF';
+      ctx.beginPath();
+      ctx.ellipse(item.x + 5, item.y + bob + 5, 5, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFE';
+      ctx.beginPath();
+      ctx.ellipse(item.x + 5, item.y + bob + 3, 4, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Player
+  const pxls = selectedChar === 'matt' ? MATT_STAND : JOHN_STAND;
+  drawPixelArt(player.x, player.y, pxls, 2);
+
+  // Particles
+  for (const p of particles) {
+    ctx.globalAlpha = p.life / 30;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ========================================
+// QUIPS
+// ========================================
+function maybeQuip(forced) {
+  if (quipTimer > 0 && !forced) return;
+  currentQuip = forced || QUIPS[Math.floor(Math.random() * QUIPS.length)];
+  quipTimer = 150;
+}
+
+// ========================================
+// DRAW GAME
+// ========================================
+function drawGame() {
+  const lv = LEVELS[level];
+
+  // Screen shake
+  let sx = 0, sy = 0;
+  if (shakeTimer > 0) {
+    sx = (Math.random() - 0.5) * shakeIntensity * 2;
+    sy = (Math.random() - 0.5) * shakeIntensity * 2;
+  }
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // Background
+  ctx.fillStyle = lv.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Background stars/particles
+  for (const bg of bgElements) {
+    const bx = (bg.x + gameTime * bg.speed * 0.3) % W;
+    const by = bg.y + Math.sin(gameTime * 0.01 + bg.phase) * 2;
+    ctx.fillStyle = `rgba(255,255,255,0.12)`;
+    ctx.fillRect(bx, by, bg.size, bg.size);
+  }
+
+  // Level-specific background details
+  if (lv.hasBlimp) {
+    // Burning blimp wreckage
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.ellipse(650, 70, 50, 20, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    for (let i = 0; i < 5; i++) {
+      const fx = 625 + i * 12;
+      const fh = 8 + Math.sin(gameTime * 0.15 + i * 1.5) * 6;
+      ctx.fillStyle = i % 2 === 0 ? '#F60' : '#FF0';
+      ctx.globalAlpha = 0.6;
+      ctx.fillRect(fx, 55 - fh, 6, fh);
+    }
+    ctx.globalAlpha = 1;
+    // Smoke
+    for (let i = 0; i < 3; i++) {
+      const smokeY = 30 - i * 15 + Math.sin(gameTime * 0.02 + i) * 5;
+      ctx.fillStyle = `rgba(100,100,100,${0.15 - i * 0.04})`;
+      ctx.beginPath();
+      ctx.arc(660 + Math.sin(gameTime * 0.01 + i * 2) * 10, smokeY, 8 + i * 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Platforms
+  for (const p of platforms) {
+    // Platform body
+    ctx.fillStyle = lv.ground;
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+    // Grass/edge
+    ctx.fillStyle = lv.accent || '#6a5';
+    ctx.fillRect(p.x, p.y, p.w, 3);
+    // Subtle texture
+    for (let tx = p.x + 4; tx < p.x + p.w; tx += 8) {
+      ctx.fillStyle = `rgba(0,0,0,0.15)`;
+      ctx.fillRect(tx, p.y + 4, 2, p.h - 5);
+    }
+  }
+
+  // Exit portal
+  if (exitZone && enemies.filter(e => e.hp > 0).length === 0) {
+    const pulse = 0.5 + Math.sin(gameTime * 0.08) * 0.3;
+    ctx.fillStyle = `rgba(0, 255, 0, ${pulse * 0.3})`;
+    ctx.beginPath();
+    ctx.arc(exitZone.x + exitZone.w/2, exitZone.y + exitZone.h/2, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(0, 255, 0, ${pulse})`;
+    ctx.fillRect(exitZone.x, exitZone.y, exitZone.w, exitZone.h);
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('EXIT', exitZone.x + exitZone.w/2, exitZone.y - 8);
+    ctx.fillText('▼', exitZone.x + exitZone.w/2, exitZone.y - 0);
+  }
+
+  // Items
+  for (const item of items) {
+    if (item.collected) continue;
+    const bob = Math.sin(item.bobTimer) * 3;
+    const iy = item.y + bob;
+    if (item.type === 'terminal') {
+      drawPixelArt(item.x, iy, TERMINAL_PIXELS, 2);
+      // Glow effect
+      ctx.fillStyle = `rgba(0,255,0,${0.1 + Math.sin(gameTime * 0.05) * 0.05})`;
+      ctx.beginPath();
+      ctx.arc(item.x + 8, iy + 7, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0F0';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('[X] ZOMBOCOM', item.x + 8, iy - 5);
+    } else if (item.type === 'chilis') {
+      drawPixelArt(item.x, iy, CHILIS_PIXELS, 2);
+      ctx.fillStyle = '#F44';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText("[X] Chili's", item.x + 10, iy - 5);
+    } else if (item.type === 'jetpack') {
+      ctx.fillStyle = '#777';
+      ctx.fillRect(item.x + 3, iy, 14, 16);
+      ctx.fillStyle = '#555';
+      ctx.fillRect(item.x + 5, iy + 2, 10, 12);
+      ctx.fillStyle = OR;
+      const fh = 4 + Math.sin(gameTime * 0.2) * 3;
+      ctx.fillRect(item.x + 5, iy + 16, 4, fh);
+      ctx.fillRect(item.x + 11, iy + 16, 4, fh);
+      ctx.fillStyle = '#FFF';
+      ctx.font = '8px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('JET', item.x + 10, iy - 3);
+    } else if (item.type === 'margarita') {
+      // Margarita glass
+      ctx.fillStyle = '#0DD';
+      ctx.fillRect(item.x + 4, iy + 4, 12, 12);
+      ctx.fillStyle = '#FF0';
+      ctx.fillRect(item.x + 2, iy + 1, 16, 4);
+      ctx.fillStyle = '#0F0';
+      ctx.fillRect(item.x + 15, iy + 2, 4, 3);
+      // Salt rim
+      ctx.fillStyle = '#FFF';
+      ctx.fillRect(item.x + 2, iy, 16, 1);
+      // Glow
+      ctx.fillStyle = `rgba(0,255,255,${0.1 + Math.sin(gameTime * 0.06) * 0.05})`;
+      ctx.beginPath();
+      ctx.arc(item.x + 10, iy + 8, 12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Enemies
+  for (const e of enemies) {
+    if (e.hp <= 0) continue;
+    ctx.save();
+    if (e.hitTimer > 0) {
+      ctx.globalAlpha = 0.5 + Math.random() * 0.5;
+    }
+    let sprite;
+    switch(e.type) {
+      case 'egg': sprite = EGG_PIXELS; break;
+      case 'raccoon': sprite = RACCOON_PIXELS; break;
+      case 'lawyer': sprite = LAWYER_PIXELS; break;
+      case 'witch': sprite = WITCH_PIXELS; break;
+      case 'doctor': sprite = DOCTOR_PIXELS; break;
+      default: sprite = EGG_PIXELS;
+    }
+    if (e.facing < 0) {
+      ctx.save();
+      ctx.translate(e.x + e.w, 0);
+      ctx.scale(-1, 1);
+      drawPixelArt(0, e.y, sprite, 2);
+      ctx.restore();
+    } else {
+      drawPixelArt(e.x, e.y, sprite, 2);
+    }
+    // Enemy HP pips (only if damaged)
+    if (e.hp < (e.type === 'lawyer' ? 5 : e.type === 'witch' || e.type === 'doctor' ? 4 : 3)) {
+      const maxHp = e.type === 'lawyer' ? 5 : e.type === 'witch' || e.type === 'doctor' ? 4 : 3;
+      for (let i = 0; i < maxHp; i++) {
+        ctx.fillStyle = i < e.hp ? '#0F0' : '#500';
+        ctx.fillRect(e.x + i * 4, e.y - 5, 3, 3);
+      }
+    }
+    ctx.restore();
+  }
+
+  // Boss
+  if (boss && boss.active) {
+    ctx.save();
+    if (boss.hitTimer > 0) ctx.globalAlpha = 0.5 + Math.random() * 0.5;
+    let bossSprite, bossScale;
+    if (boss.type === 'palmeri') {
+      drawPixelArt(boss.x - 8, boss.y - 30, PALMERI_PIXELS, 2.5);
+      bossSprite = CHICKEN_PIXELS;
+      bossScale = boss.phase === 'marge' ? 5 : 4;
+    } else {
+      bossSprite = CHIP_PIXELS;
+      bossScale = 4;
+    }
+    if (boss.facing < 0) {
+      ctx.save();
+      ctx.translate(boss.x + boss.w, 0);
+      ctx.scale(-1, 1);
+      drawPixelArt(0, boss.y, bossSprite, bossScale);
+      ctx.restore();
+    } else {
+      drawPixelArt(boss.x, boss.y, bossSprite, bossScale);
+    }
+    ctx.restore();
+
+    // Boss HP bar
+    const barW = 220;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(W/2 - barW/2 - 2, 10, barW + 4, 22);
+    ctx.fillStyle = '#600';
+    ctx.fillRect(W/2 - barW/2, 12, barW, 18);
+    ctx.fillStyle = boss.hp > boss.maxHp * 0.3 ? '#F00' : '#F80';
+    ctx.fillRect(W/2 - barW/2, 12, barW * (boss.hp / boss.maxHp), 18);
+    // Flash when low
+    if (boss.hp <= boss.maxHp * 0.3 && Math.sin(gameTime * 0.2) > 0) {
+      ctx.fillStyle = 'rgba(255,255,0,0.3)';
+      ctx.fillRect(W/2 - barW/2, 12, barW * (boss.hp / boss.maxHp), 18);
+    }
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    const bossName = boss.type === 'palmeri'
+      ? (boss.phase === 'marge' ? 'LARGE MARGE - ENRAGED!' : 'MRS. PALMERI & LARGE MARGE')
+      : (boss.phase === 2 ? 'CHIP - MAXIMUM HYDRATION!' : 'CHIP FROM GATORADE');
+    ctx.fillText(bossName, W/2, 26);
+  }
+
+  // Projectiles
+  for (const p of projectiles) {
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    // Trail
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.arc(p.x - p.vx, p.y - p.vy, p.size * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // Player
+  if (!player.dead) {
+    ctx.save();
+    if (player.invincible > 0 && Math.floor(player.invincible / 3) % 2) ctx.globalAlpha = 0.35;
+
+    // Choose sprite
+    let sprite;
+    const isRunning = Math.abs(player.vx) > 0.5 && player.grounded;
+    const isAttacking = player.attacking && player.attackTimer > 0;
+    if (selectedChar === 'matt') {
+      sprite = isAttacking ? MATT_ATTACK : (isRunning && Math.floor(player.animFrame) % 2 ? MATT_RUN : MATT_STAND);
+    } else {
+      sprite = isAttacking ? JOHN_ATTACK : (isRunning && Math.floor(player.animFrame) % 2 ? JOHN_RUN : JOHN_STAND);
+    }
+
+    if (player.facing < 0) {
+      ctx.save();
+      ctx.translate(player.x + player.w, 0);
+      ctx.scale(-1, 1);
+      drawPixelArt(0, player.y, sprite, 2);
+      ctx.restore();
+    } else {
+      drawPixelArt(player.x, player.y, sprite, 2);
+    }
+
+    // Sword swing arc
+    if (isAttacking && player.attackTimer > (selectedChar === 'matt' ? 6 : 10)) {
+      const atkX = player.facing > 0 ? player.x + player.w + 2 : player.x - (selectedChar === 'matt' ? 22 : 32);
+      const swingProgress = player.attackTimer / (selectedChar === 'matt' ? 12 : 18);
+      ctx.strokeStyle = `rgba(200, 200, 255, ${swingProgress})`;
+      ctx.lineWidth = 2;
+      const arcStart = player.facing > 0 ? -Math.PI/3 : Math.PI + Math.PI/3;
+      const arcEnd = player.facing > 0 ? Math.PI/3 : Math.PI - Math.PI/3;
+      ctx.beginPath();
+      ctx.arc(player.x + player.w/2, player.y + player.h/2, selectedChar === 'matt' ? 20 : 30, arcStart, arcEnd);
+      ctx.stroke();
+    }
+
+    // Jetpack backpack
+    if (player.jetpack > 0) {
+      ctx.fillStyle = '#777';
+      ctx.fillRect(player.x + 2, player.y + player.h - 8, 12, 10);
+      ctx.fillStyle = '#F60';
+      const jfh = 3 + Math.random() * 4;
+      ctx.fillRect(player.x + 4, player.y + player.h + 2, 3, jfh);
+      ctx.fillRect(player.x + 9, player.y + player.h + 2, 3, jfh);
+    }
+
+    // Speed boost aura
+    if (player.speedBoost > 0) {
+      ctx.fillStyle = `rgba(0, 255, 255, ${0.1 + Math.sin(gameTime * 0.1) * 0.05})`;
+      ctx.beginPath();
+      ctx.arc(player.x + player.w/2, player.y + player.h/2, 18, 0, Math.PI * 2);
+      ctx.fill();
+      // Speed lines
+      for (let i = 0; i < 3; i++) {
+        ctx.strokeStyle = `rgba(0, 255, 255, ${0.3 - i * 0.1})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const lx = player.x - player.facing * (5 + i * 6);
+        ctx.moveTo(lx, player.y + 4 + i * 7);
+        ctx.lineTo(lx - player.facing * 8, player.y + 4 + i * 7);
+        ctx.stroke();
+      }
+    }
+
+    // Invincibility shield
+    if (player.invincible > 60) {
+      const shimmer = Math.sin(gameTime * 0.15);
+      ctx.strokeStyle = `rgba(255, 0, 255, ${0.4 + shimmer * 0.2})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(player.x + player.w/2, player.y + player.h/2, 16 + shimmer * 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  // Particles
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life / 30);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+
+  // Floating texts
+  for (const t of floatingTexts) {
+    ctx.globalAlpha = Math.max(0, t.life / 70);
+    ctx.fillStyle = t.color;
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(t.text, t.x, t.y);
+  }
+  ctx.globalAlpha = 1;
+
+  // Quip bubble
+  if (quipTimer > 0 && !player.dead) {
+    const qx = player.x + player.w/2;
+    const qy = player.y - 35;
+    const qw = ctx.measureText(currentQuip).width + 16;
+    ctx.font = '12px monospace';
+    // Bubble background
+    ctx.fillStyle = 'rgba(0,0,0,0.8)';
+    const rx = qx - qw/2;
+    ctx.beginPath();
+    ctx.roundRect(rx, qy - 8, qw, 22, 4);
+    ctx.fill();
+    // Tail
+    ctx.beginPath();
+    ctx.moveTo(qx - 4, qy + 14);
+    ctx.lineTo(qx, qy + 20);
+    ctx.lineTo(qx + 4, qy + 14);
+    ctx.fill();
+    // Text
+    ctx.fillStyle = '#FFF';
+    ctx.textAlign = 'center';
+    ctx.fillText(currentQuip, qx, qy + 7);
+  }
+
+  ctx.restore(); // un-shake
+
+  // Death overlay
+  if (player.dead) {
+    ctx.fillStyle = `rgba(0,0,0,${Math.min(0.6, deathTimer * 0.015)})`;
+    ctx.fillRect(0, 0, W, H);
+    // Red vignette
+    const grad = ctx.createRadialGradient(W/2, H/2, 100, W/2, H/2, 400);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(100,0,0,0.4)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = '#F00';
+    ctx.font = 'bold 40px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('DEFEATED!', W/2, H/2 - 20);
+    ctx.fillStyle = '#FFF';
+    ctx.font = '16px monospace';
+    ctx.fillText(`Lives: ${'♥'.repeat(Math.max(0, player.lives - 1))}${player.lives <= 1 ? ' LAST CHANCE!' : ''}`, W/2, H/2 + 20);
+    if (deathTimer > 60) {
+      ctx.fillStyle = Math.sin(gameTime * 0.1) > 0 ? '#FF0' : '#FFF';
+      ctx.font = '14px monospace';
+      ctx.fillText('PRESS ENTER TO CONTINUE', W/2, H/2 + 55);
+    }
+  }
+
+  // HUD
+  drawHUD();
+}
+
+function drawHUD() {
+  // HP bar
+  ctx.fillStyle = '#111';
+  ctx.fillRect(8, 8, 154, 22);
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(8, 8, 154, 22);
+  const hpRatio = Math.max(0, player.hp / player.maxHp);
+  const hpColor = hpRatio > 0.5 ? '#0D0' : hpRatio > 0.25 ? '#DD0' : '#D00';
+  ctx.fillStyle = hpColor;
+  ctx.fillRect(10, 10, 150 * hpRatio, 18);
+  // HP flash when low
+  if (hpRatio <= 0.25 && hpRatio > 0 && Math.sin(gameTime * 0.15) > 0) {
+    ctx.fillStyle = 'rgba(255,100,100,0.3)';
+    ctx.fillRect(10, 10, 150 * hpRatio, 18);
+  }
+  ctx.fillStyle = '#FFF';
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`HP: ${Math.max(0, Math.ceil(player.hp))}/${player.maxHp}`, 14, 24);
+
+  // Lives
+  ctx.fillStyle = '#F44';
+  ctx.font = '12px monospace';
+  ctx.fillText('♥'.repeat(player.lives), 170, 24);
+
+  // Score
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#FFF';
+  ctx.font = 'bold 13px monospace';
+  ctx.fillText(`SCORE: ${score}`, W - 10, 24);
+
+  // Character name & combo
+  ctx.textAlign = 'left';
+  ctx.fillStyle = selectedChar === 'matt' ? '#6AF' : '#F66';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText(selectedChar.toUpperCase(), 10, 44);
+
+  if (comboCount >= 2) {
+    ctx.fillStyle = '#FF0';
+    ctx.fillText(`COMBO x${comboCount}!`, 60, 44);
+  }
+
+  // Buffs
+  let buffY = 54;
+  if (player.speedBoost > 0) {
+    ctx.fillStyle = '#0FF'; ctx.fillText(`SPEED ${Math.ceil(player.speedBoost/60)}s`, 10, buffY); buffY += 13;
+  }
+  if (player.invincible > 60) {
+    ctx.fillStyle = '#F0F'; ctx.fillText(`SHIELD ${Math.ceil(player.invincible/60)}s`, 10, buffY); buffY += 13;
+  }
+  if (player.jetpack > 0) {
+    ctx.fillStyle = '#F90'; ctx.fillText(`JETPACK ${Math.ceil(player.jetpack/60)}s`, 10, buffY); buffY += 13;
+  }
+
+  // Enemies remaining (non-boss levels)
+  const remaining = enemies.filter(e => e.hp > 0).length;
+  if (remaining > 0 && !LEVELS[level].boss) {
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#F88';
+    ctx.font = '11px monospace';
+    ctx.fillText(`Enemies: ${remaining}`, W - 10, 44);
+  }
+
+  // Level name
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#555';
+  ctx.font = '10px monospace';
+  ctx.fillText(LEVELS[level].name, W/2, H - 14);
+
+  // Controls
+  ctx.fillStyle = '#333';
+  ctx.font = '9px monospace';
+  ctx.fillText('ARROWS/WASD: Move | SPACE/UP: Jump | Z/K: Attack | X/L: Interact', W/2, H - 3);
+}
+
+// ========================================
+// GAME OVER
+// ========================================
+function drawGameOver() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  // Broken egg fragments
+  for (let i = 0; i < 8; i++) {
+    const ex = 100 + i * 90;
+    const ey = 400 + Math.sin(i * 1.3) * 30;
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath();
+    ctx.arc(ex, ey, 8, 0, Math.PI);
+    ctx.fill();
+    ctx.fillStyle = '#FF0';
+    ctx.beginPath();
+    ctx.arc(ex, ey + 3, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = '#F00';
+  ctx.font = 'bold 48px monospace';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = '#800';
+  ctx.shadowBlur = 10;
+  ctx.fillText('GAME OVER', W/2, H/2 - 60);
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#FFF';
+  ctx.font = '22px monospace';
+  ctx.fillText(`Final Score: ${score}`, W/2, H/2 - 10);
+
+  ctx.fillStyle = '#FF0';
+  ctx.font = '16px monospace';
+  ctx.fillText('The Egg People have won... for now.', W/2, H/2 + 30);
+
+  ctx.fillStyle = '#888';
+  ctx.font = '14px monospace';
+  ctx.fillText('"You can do anything at Zombocom.', W/2, H/2 + 70);
+  ctx.fillText('Even fail. And try again."', W/2, H/2 + 90);
+
+  if (Math.sin(gameTime * 0.08) > 0) {
+    ctx.fillStyle = '#FFF';
+    ctx.font = '16px monospace';
+    ctx.fillText('PRESS ENTER TO TRY AGAIN', W/2, H/2 + 140);
+  }
+
+  if (consumeKey('Enter') || consumeKey('Space')) {
+    score = 0;
+    player.lives = 3;
+    gameState = GS.SELECT;
+  }
+}
+
+// ========================================
+// WIN SCREEN
+// ========================================
+let winTimer = 0;
+function drawWin() {
+  winTimer++;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  // Fireworks
+  for (let i = 0; i < 15; i++) {
+    const fx = (i * 83 + winTimer * 1.5) % W;
+    const fy = 80 + Math.sin(winTimer * 0.03 + i * 1.1) * 80;
+    const colors = ['#F00', '#0F0', '#00F', '#FF0', '#F0F', '#0FF', '#FFF'];
+    ctx.fillStyle = colors[i % colors.length];
+    const sz = 2 + Math.sin(winTimer * 0.1 + i) * 2;
+    ctx.beginPath();
+    ctx.arc(fx, fy, sz, 0, Math.PI * 2);
+    ctx.fill();
+    // Sparkle trail
+    for (let j = 0; j < 3; j++) {
+      ctx.globalAlpha = 0.3 - j * 0.1;
+      ctx.beginPath();
+      ctx.arc(fx - j * 3, fy + j * 2, sz * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.fillStyle = '#FF0';
+  ctx.font = 'bold 38px monospace';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = '#F90';
+  ctx.shadowBlur = 15;
+  ctx.fillText('YOU SAVED ZOMBOCOM!', W/2, 180);
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#FFF';
+  ctx.font = 'bold 20px monospace';
+  ctx.fillText(`Final Score: ${score}`, W/2, 230);
+
+  ctx.font = '15px monospace';
+  ctx.fillStyle = '#0F0';
+  const lines = [
+    'Chip from Gatorade has been defeated.',
+    'The Egg People retreat to their shells.',
+    'Danny DeVito sheds a single tear of pride.',
+    '',
+    '"You can do anything at Zombocom."',
+    '"The only limit is yourself."',
+    '',
+    'Matt and John head to the nearest Chili\'s.',
+    'They order Presidente Margaritas.',
+    'Nobody mentions the 50 raw eggs.',
+    'Life is good.',
+  ];
+  lines.forEach((line, i) => {
+    if (i * 22 + 280 < winTimer * 2 + 280) {
+      ctx.fillStyle = line.startsWith('"') ? '#FF0' : '#0F0';
+      ctx.fillText(line, W/2, 280 + i * 22);
+    }
+  });
+
+  // Characters celebrating
+  if (winTimer > 60) {
+    const bounce = Math.abs(Math.sin(winTimer * 0.08)) * 5;
+    drawPixelArt(W/2 - 50, 520 - bounce, MATT_STAND, 3);
+    drawPixelArt(W/2 + 10, 520 - bounce, JOHN_STAND, 3);
+
+    // Danny approves
+    drawPixelArt(W/2 - 12, 490 - bounce * 0.5, DEVITO_PIXELS, 2);
+  }
+
+  ctx.fillStyle = '#888';
+  ctx.font = '12px monospace';
+  ctx.fillText('A ZOMBOCOM PRODUCTION', W/2, 575);
+  ctx.fillText('CREATIVE DIRECTORS: MATT & JOHN', W/2, 590);
+
+  if (winTimer > 120 && (Math.sin(winTimer * 0.08) > 0)) {
+    ctx.fillStyle = '#FFF';
+    ctx.font = '14px monospace';
+    ctx.fillText('PRESS ENTER TO PLAY AGAIN', W/2, 560);
+  }
+
+  if (winTimer > 60 && (consumeKey('Enter') || consumeKey('Space'))) {
+    score = 0;
+    winTimer = 0;
+    gameState = GS.TITLE;
+  }
+}
+
+// ========================================
+// MAIN LOOP
+// ========================================
+function update() {
+  switch(gameState) {
+    case GS.TITLE: updateTitle(); break;
+    case GS.INTRO: updateIntro(); break;
+    case GS.SELECT: updateSelect(); break;
+    case GS.TRANSITION: updateTransition(); break;
+    case GS.PLAYING:
+    case GS.BOSS: updateGame(); break;
+    case GS.BONUS: updateBonus(); break;
+  }
+  // Clear justPressed at end of frame
+  for (const k in justPressed) justPressed[k] = false;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  switch(gameState) {
+    case GS.TITLE: drawTitle(); break;
+    case GS.INTRO: drawIntro(); break;
+    case GS.SELECT: drawSelect(); break;
+    case GS.TRANSITION: drawTransition(); break;
+    case GS.PLAYING:
+    case GS.BOSS: drawGame(); break;
+    case GS.BONUS: drawBonus(); break;
+    case GS.GAMEOVER: drawGameOver(); break;
+    case GS.WIN: drawWin(); break;
+  }
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
