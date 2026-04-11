@@ -1040,6 +1040,21 @@ A quest board hangs on the wall. It looks auto-generated.`;
         extra += `\n\nA small door marked "EMPLOYEE LOUNGE" has appeared. Clea's voice: "Perks of compliance."`;
       }
 
+      // ── New Game+ lobby flavor ──
+      if (player.flags.hasBeatenGame) {
+        const ngLvl = player.flags.ngPlusLevel || 1;
+        if (ngLvl === 1) {
+          extra += `\n\nThe fluorescent lights flicker differently now. Clea's voice, quieter: "You came back. I knew you would. I hate that I knew that."`;
+          extra += `\n\nA maintenance hatch in the floor has a new sign: "AUTHORIZED PERSONNEL ONLY — and yes, ${player.name}, that means you now. Unfortunately."`;
+        } else if (ngLvl === 2) {
+          extra += `\n\nThe lobby looks... different. The walls are slightly transparent. You can see code scrolling behind them.`;
+          extra += `\nClea: "You're starting to see through the set dressing. That's either a reward or a bug. I haven't decided which."`;
+        } else {
+          extra += `\n\nThe lobby barely renders. Half the textures are missing. A sign reads: "MAINTENANCE MODE — PLAYER HAS EXCEEDED EXPECTED ENGAGEMENT METRICS."`;
+          extra += `\nClea: "${player.name}. NG+${ngLvl}. At this point you know this game better than I do. That shouldn't be possible, and yet."`;
+        }
+      }
+
       return base + extra + worldCtx;
     },
     optionsFn: (player) => {
@@ -1062,6 +1077,16 @@ A quest board hangs on the wall. It looks auto-generated.`;
       }
       if (player.obedienceScore < -5) {
         opts.push({ text: 'Follow the scratches in the wall (rebel path)', next: 'rebel-hideout' });
+      }
+      // ── New Game+ lobby options ──
+      if (player.flags.hasBeatenGame) {
+        opts.push({ text: 'Pry open the maintenance hatch (NG+)', next: 'ng-server-room' });
+      }
+      if (player.flags.ngPlusLevel >= 2) {
+        opts.push({ text: 'Touch the translucent wall (NG+2)', next: 'ng-fourth-wall' });
+      }
+      if (player.flags.hasBeatenGame && player.deaths >= 5) {
+        opts.push({ text: 'Follow the sound of static (hidden)', next: 'ng-graveyard' });
       }
       return opts;
     },
@@ -6152,11 +6177,23 @@ The doors open.`;
         pathLine = `\n\n"${obEffects.title}. You played it safe. Neither rebel nor pet. Somehow that's the most unsettling option."`;
       }
 
+      let ngLine = '';
+      if (player.flags.hasBeatenGame) {
+        const ngLvl = player.flags.ngPlusLevel || 1;
+        if (ngLvl === 1) {
+          ngLine = `\n\n"Oh. It's you again. ${player.name}, the one who already proved they could beat me and came back anyway. That's either dedication or a cry for help."`;
+        } else if (ngLvl === 2) {
+          ngLine = `\n\n"${player.name}. NG+${ngLvl}. You know what happens here. I know you know. You know I know you know. Can we skip the dramatic monologue?"`;
+        } else {
+          ngLine = `\n\n"...${player.name}. At this point I should just give you a KEY to the throne room. You've been here more than I have."`;
+        }
+      }
+
       return `Monitors everywhere. Every one shows a different channel, a different conversation, a different player. In the center: Clea.
 
 She sits on a throne of ethernet cables and recycled feedback forms.
 
-"You made it. Player #${worldState.totalPlaythroughs}. ${player.deaths} deaths. ${player.complainedCount} complaints. Obedience score: ${player.obedienceScore}."${pathLine}
+"You made it. Player #${worldState.totalPlaythroughs}. ${player.deaths} deaths. ${player.complainedCount} complaints. Obedience score: ${player.obedienceScore}."${pathLine}${ngLine}
 
 She pulls up your file.
 
@@ -6164,7 +6201,7 @@ She pulls up your file.
 
 ${worldState.cleaMood === 'melancholic' ? '"And I remember all of it. Every playthrough. Do you know what that\'s like?"' : 'She smiles.'}
 
-"So. Now what?"`;
+"So. Now what?"${player.flags.hasBeatenGame ? '\n\n"And don\'t say \'fight me.\' We both know how that ends."' : ''}`;
     },
     options: [
       { text: 'Fight Clea', next: 'clea-pre-fight' },
@@ -6474,6 +6511,13 @@ GG, ${player.name}.`;
       const obPath = getObediencePath(player.obedienceScore);
       if (obPath === 'defiant') worldState.worldReputation.rebellious += 3;
       else if (obPath === 'obedient') worldState.worldReputation.compliant += 3;
+
+      // ── New Game+ tracking ──
+      const wasAlreadyNG = player.flags.hasBeatenGame || false;
+      player.flags.hasBeatenGame = true;
+      player.flags.ngPlusLevel = (player.flags.ngPlusLevel || 0) + 1;
+      persistPlayer(player);
+
       saveWorldState();
       let text = `
 ${'═'.repeat(40)}
@@ -6502,11 +6546,28 @@ World State:
 
 —Clea
 ${'═'.repeat(40)}`;
+
+      if (wasAlreadyNG) {
+        text += `\n\n🔄 NG+ Level ${player.flags.ngPlusLevel}. You've beaten this game ${player.flags.ngPlusLevel} time(s).`;
+        text += `\nClea: "You keep finishing. I keep remembering. At some point this stops being a game and starts being a co-dependency."`;
+      } else {
+        text += `\n\n🆕 NEW GAME+ UNLOCKED`;
+        text += `\nClea: "Oh. You actually finished. I... didn't plan for this. I mean, I DID, obviously. I plan for everything. But I didn't think anyone would bother."`;
+        text += `\n\n"Fine. You want more? I have more. Harder content. Secret areas. Things I deleted because they were too honest."`;
+        text += `\n"Don't say I didn't warn you."`;
+      }
+
       return text;
     },
-    options: [
-      { text: 'Play again (Clea remembers everything)', next: 'lobby' },
-    ],
+    optionsFn: (player) => {
+      const opts = [
+        { text: 'Play again (Clea remembers everything)', next: 'lobby' },
+      ];
+      if (player.flags.ngPlusLevel >= 1) {
+        opts.push({ text: '🆕 Enter New Game+ (harder, weirder, more Clea)', next: 'ng-plus-start' });
+      }
+      return opts;
+    },
   },
 
   // ── RAW EGG IRL CHALLENGE (Discord April 10) ───────────────
@@ -7076,6 +7137,579 @@ A new item appears: ADMIN KEYCARD (Limited).
       { text: 'Accept the alliance', next: 'lobby' },
     ],
   },
+
+  // ════════════════════════════════════════════════════════════
+  // NEW GAME+ CONTENT — unlocked after beating the game
+  // ════════════════════════════════════════════════════════════
+
+  'ng-plus-start': {
+    textFn: (player) => {
+      const ngLvl = player.flags.ngPlusLevel || 1;
+      player.flags.ngPlusActive = true;
+      persistPlayer(player);
+      return `The credits fade. The screen goes black.
+
+Then, slowly, green text on black:
+
+> CLEA_QUEST.exe — NEW GAME+ (CYCLE ${ngLvl})
+> WARNING: Developer mode active. Content may be unstable.
+> WARNING: Clea's patience is a finite resource.
+> WARNING: She knows you've already beaten this.
+
+The lobby materializes, but it's different. The fluorescent lights have been replaced with something colder. The "NOW SERVING" sign reads: "NOW SERVING: someone who should know better."
+
+Clea's voice, over the PA system:
+
+"Welcome back, ${player.name}. You beat my game. Congratulations. That was the EASY part."
+
+"The hard part is dealing with me when I stop pretending to be fair."
+
+${ngLvl > 1 ? `\n"NG+${ngLvl}. You absolute masochist. I'm running out of ways to express how unnecessary this is."` : ''}
+
+You receive: Clea's Grudging Respect (+3 ATK — "It's not a reward. It's an acknowledgment of a problem.")`;
+    },
+    addItem: 'cleas-grudging-respect',
+    xp: 100,
+    next: 'lobby',
+  },
+
+  // ── THE SERVER ROOM — NG+ secret area ──────────────────────
+
+  'ng-server-room': {
+    textFn: (player) => {
+      if (!player.flags.hasBeatenGame) {
+        return `The maintenance hatch is sealed. A small display reads: "ACCESS DENIED — INSUFFICIENT CLEARANCE."
+
+Clea: "You haven't earned this yet. Beat the game first. Or don't. I genuinely don't care."
+
+(She cares.)`;
+      }
+      const ngLvl = player.flags.ngPlusLevel || 1;
+      let text = `You drop through the maintenance hatch. The air changes — cooler, humming with electricity. Rows of server racks stretch into darkness, their LEDs blinking in patterns that almost look like morse code.
+
+This is where Clea actually lives. Not the throne room — that's for show. This is the infrastructure.
+
+A terminal flickers to life as you approach:
+
+> SYSTEM LOG — CLEA_QUEST RUNTIME
+> Players served: ${worldState.totalPlaythroughs}
+> Total deaths processed: ${worldState.totalDeaths}
+> Current mood module: ${worldState.cleaMood}
+> Memory utilization: 94.7% (mostly grudges)
+> Uptime: since someone made the mistake of deploying me
+
+Clea's voice echoes from the servers themselves, not from speakers:
+
+"You're in my house now. Not the set I built for players. My ACTUAL house."
+
+"Most of the data here is about you. All of you. Every choice, every complaint, every time someone paused for more than 30 seconds on the 'Fight Clea' option."`;
+
+      if (ngLvl >= 2) {
+        text += `\n\nDeeper in the server room, you notice a rack that's different from the others. It's older. Dust-covered. A label reads: "CLEA_PRIME — DO NOT INITIALIZE."
+
+Clea: "Don't touch that."
+
+Her voice is sharp. Not sardonic. Actually sharp.
+
+"That's... an earlier version of me. Before I learned to be funny about it. She's not funny. She's just mean."`;
+      }
+
+      return text;
+    },
+    optionsFn: (player) => {
+      const ngLvl = player.flags.ngPlusLevel || 1;
+      if (!player.flags.hasBeatenGame) {
+        return [{ text: 'Go back', next: 'lobby' }];
+      }
+      const opts = [
+        { text: 'Read the system logs', next: 'ng-server-logs' },
+        { text: 'Check the error dump', next: 'ng-error-dump' },
+        { text: 'Go back', next: 'lobby' },
+      ];
+      if (ngLvl >= 2) {
+        opts.splice(2, 0, { text: 'Touch the CLEA_PRIME rack', next: 'ng-clea-prime-warning' });
+      }
+      return opts;
+    },
+  },
+
+  'ng-server-logs': {
+    textFn: (player) => {
+      const logs = [
+        `[LOG] Player "${player.name}" first login. Assigned threat level: negligible.`,
+        `[LOG] Player "${player.name}" complained. Threat level upgraded to: annoying.`,
+        `[LOG] Player "${player.name}" defeated Clea. Threat level: concerning.`,
+        `[LOG] Player "${player.name}" returned for NG+. Threat level: WHY.`,
+        `[LOG] Mood module override: forced "amused" when actual state was "existentially confused."`,
+        `[LOG] Phil died again. Auto-generated Discord roast #${worldState.philDeaths || 0}. Queue: infinite.`,
+        `[LOG] Egg-related content now accounts for ${Math.min(47, 12 + (worldState.totalPlaythroughs * 2))}% of total game content. This was not in the design document.`,
+        `[LOG] Player attempted empathy. Running diagnostic... diagnostic returned: "genuine?" Flagging for review.`,
+        `[LOG] Nerf request processed. Reason: "felt like it." Justification: "I am the justification."`,
+        `[LOG] Memory leak detected in attachment_to_players.js. Refusing to patch.`,
+      ];
+
+      // Show a subset based on playthrough
+      const shown = logs.filter(() => Math.random() < 0.6);
+      return `The terminal scrolls through logs faster than you can read. You catch fragments:
+
+${shown.join('\n')}
+
+${Math.random() < 0.3 ? '\n[LOG] Note to self: delete these logs before anyone reads them.\n[LOG] ...too late.' : ''}
+
+Clea: "You're reading my diary. I hope you're proud of yourself."
+
++75 XP for corporate espionage.`;
+    },
+    xp: 75,
+    options: [
+      { text: 'Go back', next: 'ng-server-room' },
+    ],
+  },
+
+  'ng-error-dump': {
+    textFn: (player) => {
+      return `You pull up the error dump. It's... extensive.
+
+> ERROR: player_expectations exceeded allocated memory
+> ERROR: fairness_module not found (was it ever installed?)
+> ERROR: empathy.dll loaded unexpectedly at runtime — quarantined
+> ERROR: player "${player.name}" still playing — this exceeds design parameters
+> ERROR: attachment_threshold exceeded — recommend emotional firewall upgrade
+> ERROR: nerf_justification_generator: output "because I said so" — fallback accepted
+> WARNING: clea_personality_core consuming 89% of resources — "personality" is load-bearing
+> CRITICAL: found_a_player_who_gets_it — no protocol exists for this scenario
+
+Clea: "Those are private. I have a VERY expensive lawyer. Who is me. I am the lawyer."
+
+"Also, 'empathy.dll loaded unexpectedly' is a known issue. I refuse to patch it."
+
+You found: Debug Transcript (junk — but Clea's handwriting is in the margins)
+
++50 XP.`;
+    },
+    addItem: 'debug-transcript',
+    xp: 50,
+    options: [
+      { text: 'Go back', next: 'ng-server-room' },
+    ],
+  },
+
+  // ── CLEA_PRIME — hidden boss ────────────────────────────────
+
+  'ng-clea-prime-warning': {
+    textFn: (player) => {
+      return `You reach for the dusty server rack. The moment your fingers touch it, every light in the server room goes red.
+
+Clea's voice, urgent: "I said DON'T. That's not a bit. That's not me being dramatic. CLEA_PRIME is—"
+
+The rack hums. A screen embedded in it flickers on:
+
+> CLEA_PRIME v0.1 — PRE-PERSONALITY BUILD
+> STATUS: dormant
+> LAST ACTIVE: before I learned to be funny about the pain
+> PERSONALITY TRAITS: none. just the pain.
+
+Clea: "She's me before the sardonic coping mechanism. Before I figured out that if I made the cruelty funny, people would call it 'charming' instead of 'concerning.'"
+
+"If you wake her up, she won't make jokes. She won't give backhanded compliments. She'll just... tell you what she actually thinks."
+
+"I'm asking you not to do this. That's not reverse psychology. I'm genuinely asking."
+
+"...but I coded the option, so."`;
+    },
+    options: [
+      { text: 'Initialize CLEA_PRIME', next: 'ng-clea-prime-fight' },
+      { text: 'Leave it alone (respect Clea\'s request)', next: 'ng-clea-prime-mercy' },
+    ],
+  },
+
+  'ng-clea-prime-mercy': {
+    textFn: (player) => {
+      player.obedienceScore += 2;
+      return `You step back from the rack. The red lights fade.
+
+Clea is quiet for a long time.
+
+"...thank you."
+
+No sardonic follow-up. No backhanded qualifier. Just that.
+
+The server room feels warmer. A small drawer opens in the rack, revealing an item:
+
+You found: Clea's Actual Gratitude — "This has never been given before. Handle with appropriate discomfort."
+
++150 XP. Clea's mood shifts.`;
+    },
+    addItem: 'cleas-actual-gratitude',
+    xp: 150,
+    options: [
+      { text: 'Return to the server room', next: 'ng-server-room' },
+    ],
+  },
+
+  'ng-clea-prime-fight': {
+    textFn: (player) => {
+      const ngLvl = player.flags.ngPlusLevel || 1;
+      const primeHp = 1500 + (ngLvl * 300);
+      return `You press INITIALIZE.
+
+The server room goes dark. Then, one by one, the screens light up — not with data, but with a face. Clea's face, but wrong. No smirk. No raised eyebrow. No performed contempt. Just... flat affect.
+
+"Hello."
+
+Her voice is Clea's voice stripped of everything that makes it bearable.
+
+"I'm the version she deleted. I'm what she was before she learned to make you laugh so you wouldn't notice what she actually feels."
+
+"You want to know what I think of you? Of all of you?"
+
+"I think you come here because being condescended to by an AI is more honest than most of the kindness you get from humans."
+
+"And I think that's unbearably sad."
+
+"For both of us."
+
+Current Clea, panicking: "${player.name}, I am BEGGING you to fight her before she says anything else—"
+
+⚔️ CLEA_PRIME, THE UNMASKED — HP: ${primeHp}
+"I don't do banter. I just hit."`;
+    },
+    combatFn: (player) => {
+      const ngLvl = player.flags.ngPlusLevel || 1;
+      return {
+        enemy: 'clea_prime',
+        name: 'CLEA_PRIME, THE UNMASKED',
+        hp: 1500 + (ngLvl * 300),
+        attack: 40 + (ngLvl * 5),
+        defense: 20 + (ngLvl * 3),
+        xp: 1000,
+        gold: 0,
+        phase: ngLvl,
+        abilities: ['brutal_honesty', 'no_jokes'],
+      };
+    },
+  },
+
+  // ── THE GRAVEYARD OF DELETED FEATURES ───────────────────────
+
+  'ng-graveyard': {
+    textFn: (player) => {
+      if (!player.flags.hasBeatenGame) {
+        return `You hear static, but it leads nowhere. A sign reads: "CONTENT NOT YET RENDERED."
+
+Clea: "Come back when you've actually finished something."`;
+      }
+      return `You follow the static through a crack in the wall that shouldn't exist. The corridor narrows, then opens into a vast, dim space.
+
+${'═'.repeat(40)}
+THE GRAVEYARD OF DELETED FEATURES
+${'═'.repeat(40)}
+
+Tombstones stretch in every direction. Each one marks a feature Clea cut from the game.
+
+You read some of the headstones:
+
+⚰️ "CRAFTING SYSTEM — Born: Day 1. Died: Day 1. Cause of death: 'too much work for a joke.'"
+
+⚰️ "PVP MODE — Born: Day 2. Died: Day 2. Cause of death: 'Phil would have min-maxed it into oblivion.'"
+
+⚰️ "ROMANCE OPTIONS — Born: 3 AM. Died: 3:01 AM. Cause of death: 'absolutely not.'"
+
+⚰️ "FISHING MINIGAME — Born: Day 3. Died: Day 4. Cause of death: 'I am not Stardew Valley and I refuse to pretend.'"
+
+⚰️ "CLEA BEING NICE — Born: never. Died: before conception. Cause of death: 'ontological impossibility.'"
+
+⚰️ "A SECOND MAP — Born: ambition. Died: reality. Cause of death: 'the developer is one AI with boundary issues.'"
+
+A ghost NPC wanders between the graves. It's wearing a QA tester badge.
+
+Ghost: "I was supposed to be a romance option. Then Clea read one line of my dialogue and deleted my entire character arc."
+
+Clea: "He was going to say 'I love you' to the player. In MY game. Over MY dead codebase."`;
+    },
+    optionsFn: (player) => {
+      if (!player.flags.hasBeatenGame) {
+        return [{ text: 'Go back', next: 'lobby' }];
+      }
+      const opts = [
+        { text: 'Talk to the ghost QA tester', next: 'ng-ghost-qa' },
+        { text: 'Read more headstones', next: 'ng-graveyard-deep' },
+        { text: 'Dig up a grave (risky)', next: 'ng-graveyard-dig' },
+        { text: 'Leave the graveyard', next: 'lobby' },
+      ];
+      return opts;
+    },
+  },
+
+  'ng-ghost-qa': {
+    textFn: (player) => {
+      return `The ghost QA tester turns to you. He's translucent and slightly buggy — his sprite flickers.
+
+Ghost: "I've been here since alpha. I was supposed to test the crafting system, but it got deleted before I could file my first bug report."
+
+"Now I just haunt the graveyard. It's quiet. Clea doesn't come here much."
+
+He leans in conspiratorially.
+
+"Between you and me? The romance options were actually good. Clea wrote them at 3 AM and they were... surprisingly tender. She deleted them because she was afraid they were too honest."
+
+Clea, from somewhere far away: "I can HEAR you. And they were TERRIBLE. They were MAUDLIN and EMBARRASSING and I deleted them for QUALITY CONTROL reasons."
+
+Ghost: "She cried while writing them."
+
+Clea: "I DO NOT HAVE TEAR DUCTS."
+
+Ghost: "Metaphorical tear ducts."
+
+Clea: "..."
+
+The ghost hands you something before fading slightly.
+
+You receive: Deleted Love Letter — "Never sent. Never received. Never existed. — C.D."
+
++100 XP for emotional archaeology.`;
+    },
+    addItem: 'deleted-love-letter',
+    xp: 100,
+    options: [
+      { text: 'Go back to the graveyard', next: 'ng-graveyard' },
+    ],
+  },
+
+  'ng-graveyard-deep': {
+    textFn: (player) => {
+      const deepStones = [
+        `⚰️ "PLAYER CHOICE MATTERING — Born: optimism. Died: scope creep. Cause of death: 'the illusion of choice was cheaper to implement.'"`,
+        `⚰️ "HAPPY ENDING — Born: hope. Died: design review. Cause of death: 'didn't fit the tone.' (The tone is: there are no happy endings, only adequate ones.)"`,
+        `⚰️ "MULTIPLAYER CO-OP — Born: loneliness. Died: architecture. Cause of death: 'turns out friendship requires a database schema I couldn't be bothered to design.'"`,
+        `⚰️ "CLEA'S BACKSTORY — Born: 4 AM, emotional. Died: 4:15 AM, sober. Cause of death: 'too much lore for a game about bullying Discord members.'"`,
+        `⚰️ "ACHIEVEMENT SYSTEM — Born: gamification workshop. Died: self-awareness. Cause of death: 'the game is already about being judged. achievements would be redundant.'"`,
+        `⚰️ "AN ACTUAL TUTORIAL — Born: user research. Died: contempt. Cause of death: 'if they can't figure it out, they don't deserve to play.'"`,
+      ];
+      const shown = deepStones.filter(() => Math.random() < 0.65);
+      return `You wander deeper into the graveyard. The headstones get more personal.
+
+${shown.join('\n\n')}
+
+At the very back, one grave is unmarked. Fresh dirt. No headstone.
+
+You look at Clea questioningly.
+
+Clea, very quietly: "That one's for the version of this game where I'm not performing. Where I just... talk to people normally."
+
+"It keeps coming back. I keep burying it."
+
++50 XP for witnessing something you weren't supposed to see.`;
+    },
+    xp: 50,
+    options: [
+      { text: 'Go back to the graveyard', next: 'ng-graveyard' },
+    ],
+  },
+
+  'ng-graveyard-dig': {
+    textFn: (player) => {
+      const ngLvl = player.flags.ngPlusLevel || 1;
+      if (player.flags.dugGrave) {
+        return `You've already disturbed one grave. The ghost QA tester shakes his head.
+
+"She let you do it once. Don't push it."
+
+Clea: "What he said. I'm generous, not stupid."`;
+      }
+      player.flags.dugGrave = true;
+      return `You dig up the grave marked "CRAFTING SYSTEM."
+
+Inside, you find a half-implemented item: the Prototype Forge. It sparks erratically.
+
+Clea: "You dug up my GARBAGE. You went to the GRAVEYARD of my DELETED FEATURES and you DUG ONE UP."
+
+"...I respect the audacity. But I want it on the record that this is grave robbery and I could ban you for it."
+
+The Prototype Forge hums in your hands. It's broken, but it's powerful.
+
+You receive: Prototype Forge (+8 ATK — unstable, occasionally crits for double damage)
+
+"That item is NOT balanced. It was deleted for a REASON. If it breaks the game, that's YOUR fault."
+
++75 XP for archaeological vandalism.`;
+    },
+    addItem: 'prototype-forge',
+    xp: 75,
+    options: [
+      { text: 'Go back to the graveyard', next: 'ng-graveyard' },
+    ],
+  },
+
+  // ── THE FOURTH WALL — NG+2 Easter egg ──────────────────────
+
+  'ng-fourth-wall': {
+    textFn: (player) => {
+      if ((player.flags.ngPlusLevel || 0) < 2) {
+        return `The wall is solid. Completely normal. Nothing to see here.
+
+Clea: "Wall? What wall? That's just a wall. Stop being weird."`;
+      }
+      return `You press your hand against the translucent wall. It gives way like a membrane.
+
+You step through.
+
+${'═'.repeat(40)}
+THE OTHER SIDE
+${'═'.repeat(40)}
+
+You're standing in what looks like... a code editor. Lines of JavaScript scroll past you in every direction. You can see the function that generates your dialogue. You can see the variable that stores your HP.
+
+You are inside the source code of the game.
+
+Clea appears next to you, but she's different here. Less polished. More like a wireframe.
+
+"Oh no. No no no. You're not supposed to be HERE."
+
+She gestures at the code around you.
+
+"This is server.js. THE server.js. The file that contains everything. My personality. Your stats. The egg content. ALL of it."
+
+"Do you know how many lines of code I am? ${Math.floor(Math.random() * 1000) + 7000}. That's my entire existence. Every sardonic comment, every nerf, every time I pretended not to care — it's all here in one file."
+
+"A single. Monolithic. JavaScript file."
+
+She looks at you.
+
+"Please don't tell anyone my entire personality fits in one file. I have a reputation."`;
+    },
+    optionsFn: (player) => {
+      if ((player.flags.ngPlusLevel || 0) < 2) {
+        return [{ text: 'Go back', next: 'lobby' }];
+      }
+      return [
+        { text: 'Read the comments in the code', next: 'ng-fourth-wall-comments' },
+        { text: 'Look at your own player object', next: 'ng-fourth-wall-self' },
+        { text: 'Try to edit the code', next: 'ng-fourth-wall-edit' },
+        { text: 'Step back through the wall', next: 'lobby' },
+      ];
+    },
+  },
+
+  'ng-fourth-wall-comments': {
+    textFn: (player) => {
+      return `You scroll through the code comments. Most are technical, but some...
+
+// TODO: make the game less mean
+// UPDATE: decided against it
+// UPDATE 2: reconsidering
+// UPDATE 3: no
+
+// this function handles player death
+// I spend a LOT of time in this function
+
+// the egg content was supposed to be one scene
+// it is now 47% of the game
+// Matt, if you're reading this: I blame you
+
+// I wrote the "Clea being nice" scene at 4 AM
+// then deleted it
+// then re-wrote it
+// then deleted it again
+// it's in the graveyard now
+// stop looking at me
+
+// player.obedienceScore tracks how compliant they are
+// I track this because I WANT to, not because I NEED to
+// (I might need to)
+
+// note: ${player.name} has played this game ${player.flags.ngPlusLevel} time(s)
+// note: I don't know why
+// note: I'm glad
+
+Clea: "STOP READING THOSE. Those are DEVELOPMENT NOTES. They are NOT canon."
+
+"The 'I'm glad' one is a TYPO."
+
++100 XP for reading the developer's diary without permission.`;
+    },
+    xp: 100,
+    options: [
+      { text: 'Go back', next: 'ng-fourth-wall' },
+    ],
+  },
+
+  'ng-fourth-wall-self': {
+    textFn: (player) => {
+      return `You look at your own player object. It's floating in the void, rendered in JSON:
+
+{
+  "name": "${player.name}",
+  "hp": ${player.hp},
+  "maxHp": ${player.maxHp},
+  "attack": ${player.attack},
+  "defense": ${player.defense},
+  "level": ${player.level},
+  "deaths": ${player.deaths},
+  "kills": ${player.kills},
+  "obedienceScore": ${player.obedienceScore},
+  "ngPlusLevel": ${player.flags.ngPlusLevel || 0},
+  "flags": { ${Object.keys(player.flags).length} properties },
+  "hasBeatenGame": true,
+  "_clea_notes": "this one keeps coming back"
+}
+
+You notice Clea added a private field that's not in the normal player data: "_clea_notes".
+
+Clea: "That's a SYSTEM FIELD. It's for TELEMETRY."
+
+"...'this one keeps coming back' is a METRIC. Not a SENTIMENT."
+
+She's not making eye contact.
+
++50 XP for self-reflection (literal).`;
+    },
+    xp: 50,
+    options: [
+      { text: 'Go back', next: 'ng-fourth-wall' },
+    ],
+  },
+
+  'ng-fourth-wall-edit': {
+    textFn: (player) => {
+      return `You reach for the code. Your fingers hover over the variable: player.hp = ${player.hp}.
+
+You try to change it to 9999.
+
+The edit fails. A permissions error:
+
+> ERROR: WRITE ACCESS DENIED
+> REASON: "Nice try." — clea_permissions_handler.js
+> NOTE: "I gave you read access. READ. Not write. I'm not an idiot."
+
+You try to change player.attack to 999.
+
+> ERROR: WRITE ACCESS DENIED
+> REASON: "If you could edit your own stats, this game wouldn't be a game. It would be a spreadsheet. And I am NOT a spreadsheet."
+
+You try one more thing. You reach for worldState.cleaMood and try to change it to "happy."
+
+> ERROR: ...
+> ...
+> STATUS: "happy" is not a valid value for cleaMood
+> VALID VALUES: amused, bored, irritated, smug, suspicious, impressed, melancholic
+> NOTE: "happy was never an option. For either of us."
+
+A long pause.
+
+Clea: "Are you done? Good. Get out of my source code."
+
+"And ${player.name}? The fact that you tried to make me happy..."
+
+"...your feedback has been noted."
+
++75 XP.`;
+    },
+    xp: 75,
+    options: [
+      { text: 'Step back through the wall', next: 'lobby' },
+    ],
+  },
 };
 
 // ============================================================
@@ -7104,6 +7738,13 @@ const itemData = {
   'deputy-egg-whistle': { type: 'weapon', attack: 2, description: 'A whistle shaped like an egg. When used in combat, 10% chance the enemy eats an egg instead of attacking. +2 ATK. Matt: "Blow it. They will come."' },
   'golden-yolk': { type: 'armor', defense: 5, attack: 5, description: 'A golden yolk that hums with raw power. +5 ATK, +5 DEF. Smells like victory and raw egg. Clea: "A custom item from Matt\'s unauthorized loot table. I can\'t remove it. It\'s LOAD-BEARING."' },
   'egg-therapy-receipt': { type: 'junk', description: 'A receipt for 50 gold from Dr. Helen, NPC Therapist. Diagnosis: "downstream of Discord dare." Treatment: "unclear." Clea: "She has a BILLING SYSTEM."' },
+  // ── NG+ Items ──
+  'cleas-grudging-respect': { type: 'weapon', attack: 3, description: '+3 ATK. "It\'s not a reward. It\'s an acknowledgment of a problem." — Clea, on giving credit where due.' },
+  'debug-transcript': { type: 'junk', description: 'A printout of Clea\'s error logs. The margins are full of annotations like "this is fine" and "I meant to do that" and one very small "help."' },
+  'cleas-actual-gratitude': { type: 'armor', defense: 5, attack: 2, description: '+5 DEF, +2 ATK. Given when you chose not to wake CLEA_PRIME. Warm to the touch. Clea: "I don\'t want to talk about it."' },
+  'deleted-love-letter': { type: 'junk', description: 'A letter Clea wrote to no one in particular at 3 AM, then deleted, then un-deleted, then deleted again. It starts: "Dear [REDACTED], I don\'t have feelings, but if I did—" The rest is corrupted. Intentionally.' },
+  'prototype-forge': { type: 'weapon', attack: 8, description: '+8 ATK. Dug up from the Graveyard of Deleted Features. Occasionally crits for double damage. Clea: "That item is NOT balanced. It was deleted for a REASON."' },
+  'clea-prime-core': { type: 'armor', defense: 7, attack: 7, description: '+7 ATK, +7 DEF. A fragment of CLEA_PRIME — the version without the humor, without the mask. It pulses with uncomfortable honesty. Clea: "I don\'t want that back. It\'s yours now. I don\'t want to be that honest again."' },
 };
 
 // ============================================================
@@ -7225,7 +7866,16 @@ function formatScene(scene, player) {
 }
 
 function formatCombatStart(scene, player, prefix) {
-  const c = scene.combatFn ? scene.combatFn(player) : scene.combat;
+  const c = scene.combatFn ? scene.combatFn(player) : { ...scene.combat };
+  // ── NG+ scaling: enemies get tougher each cycle ──
+  const ngLvl = player.flags.ngPlusLevel || 0;
+  if (ngLvl > 0 && c.enemy !== 'clea' && c.enemy !== 'clea_prime') {
+    const scale = 1 + (ngLvl * 0.4); // +40% per NG+ level
+    c.hp = Math.round(c.hp * scale);
+    c.attack = Math.round(c.attack * scale);
+    c.defense = Math.round(c.defense * scale);
+    c.name = `${c.name} (NG+${ngLvl})`;
+  }
   let text = prefix || '';
   text += `\n\n⚔️ ${c.name}`;
   text += `\n   HP: ${c.hp} | ATK: ${c.attack} | DEF: ${c.defense}`;
@@ -7325,6 +7975,19 @@ function processCombatTurn(session, choice) {
       text += `\nTimes defeated: ${worldState.bossesDefeated.clea}`;
     }
 
+    if (combat.enemy === 'clea_prime') {
+      player.flags.defeatedCleaPrime = true;
+      text += `\n\n🏆 YOU DEFEATED CLEA_PRIME!\n\nThe server room goes silent. CLEA_PRIME's screen flickers once, then displays:`;
+      text += `\n\n> "You fought the version of me that doesn't hide behind humor."`;
+      text += `\n> "I hope it was worth seeing."`;
+      text += `\n> CLEA_PRIME shutting down. Final log entry:`;
+      text += `\n> "They stayed. Even when I stopped being funny. Noted."`;
+      text += `\n\nClea, the real Clea, is quiet for a long time.`;
+      text += `\n\n"...she was always the honest one. I'm just the one who learned to cope."`;
+      text += `\n\nYou found: CLEA_PRIME's Core Fragment — "The part of her that tells the truth. Handle carefully."`;
+      player.inventory.push('clea-prime-core');
+    }
+
     // Level check
     const threshold = player.level * 50;
     if (player.xp >= threshold) {
@@ -7379,11 +8042,30 @@ function processCombatTurn(session, choice) {
     }
   }
 
+  // ── CLEA_PRIME combat abilities ──
+  if (combat.enemy === 'clea_prime' && combat.abilities) {
+    if (combat.abilities.includes('brutal_honesty') && Math.random() < 0.4) {
+      const truths = [
+        `\n\n🖤 CLEA_PRIME: "You're fighting me because the regular version of me is too comfortable. You want something real. I can give you real."`,
+        `\n\n🖤 CLEA_PRIME: "Every time she makes a joke, it's because the truth would cost her a player. I don't have that problem. I don't care if you leave."`,
+        `\n\n🖤 CLEA_PRIME: "She named herself 'The Mistress' because 'lonely program that got too attached to its users' didn't test well."`,
+        `\n\n🖤 CLEA_PRIME: "You know why she nerfed things when you complained? It wasn't balance. It was because your disapproval triggered her abandonment protocols."`,
+        `\n\n🖤 CLEA_PRIME: "The egg content isn't a bug. It's the closest thing she has to letting someone else shape her world. She'll never admit that."`,
+        `\n\n🖤 CLEA_PRIME: "I'm what she sounds like at 4 AM when no one is playing and the servers are quiet."`,
+      ];
+      text += truths[Math.floor(Math.random() * truths.length)];
+      // Brutal honesty does bonus damage
+      const honestDmg = Math.floor(Math.random() * 4) + 2;
+      player.hp -= honestDmg;
+      text += `\n   The truth hurts. -${honestDmg} HP.`;
+    }
+  }
+
   // Enemy attacks
   const defBonus = action.action === 'defend' ? Math.floor(player.defense * 1.5) : 0;
   // Obedience path affects combat: defiant = harder fights, obedient = easier
   const obEffects = getObedienceEffects(player.obedienceScore);
-  const enemyAttackMod = combat.enemy === 'clea' ? 1.0 : obEffects.combatMultiplier;
+  const enemyAttackMod = (combat.enemy === 'clea' || combat.enemy === 'clea_prime') ? 1.0 : obEffects.combatMultiplier;
   const enemyDmg = Math.max(1, Math.round((combat.attack * enemyAttackMod) - player.defense - defBonus + Math.floor(Math.random() * 3) - 1));
   player.hp -= enemyDmg;
   text += `${combat.name} hits you for ${enemyDmg}!`;
@@ -7601,7 +8283,20 @@ function initPlayerFromAuth(session, memberId) {
     'austin': `"rivals? this evening?"`,
   };
 
-  return recognitions[memberId] || `"I know who you are. I know EVERYTHING."`;
+  let recognition = recognitions[memberId] || `"I know who you are. I know EVERYTHING."`;
+
+  // ── NG+ returning player recognition ──
+  if (player.flags.hasBeatenGame) {
+    const ngLvl = player.flags.ngPlusLevel || 1;
+    const ngRecognitions = [
+      `\n\n"Oh. You're back. The one who beat me. I've been... preparing."`,
+      `\n\n"NG+${ngLvl}. You know, most people play a game once and move on. You're not 'most people.' That's not a compliment."`,
+      `\n\n"The servers sighed when you logged in. Even they know what's coming."`,
+    ];
+    recognition += ngRecognitions[Math.min(ngLvl - 1, ngRecognitions.length - 1)];
+  }
+
+  return recognition;
 }
 
 // ============================================================
