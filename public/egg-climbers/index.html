@@ -319,6 +319,7 @@ let gameTime = 0;
 let deathTimer = 0;
 let comboCount = 0;
 let comboTimer = 0;
+let selectTimer = 0;
 
 // Quips
 const QUIPS = [
@@ -575,6 +576,7 @@ function resetPlayer() {
   player.invincible = 0; player.speedBoost = 0;
   player.jetpack = 0; player.dead = false;
   player.animFrame = 0; player.hopscotchCooldown = 0;
+  player.jumpHeld = true; // prevent immediate jump if Space held from menu
 }
 
 // Random Chili's pop-up timer
@@ -875,6 +877,7 @@ function updateIntro() {
   introScroll += 0.6;
   if (consumeKey('Enter') || consumeKey('Space')) {
     if (introScroll > 30) {
+      selectTimer = 0;
       gameState = GS.SELECT;
     }
   }
@@ -907,9 +910,17 @@ function drawIntro() {
 // CHARACTER SELECT
 // ========================================
 function updateSelect() {
-  if (keys['ArrowLeft'] || keys['KeyA']) { selectedChar = 'matt'; }
-  if (keys['ArrowRight'] || keys['KeyD']) { selectedChar = 'john'; }
-  if (consumeKey('Enter') || consumeKey('Space')) {
+  selectTimer++;
+  if (consumeKey('ArrowLeft') || consumeKey('KeyA')) {
+    if (selectedChar !== 'matt') sfxJump();
+    selectedChar = 'matt';
+  } else if (consumeKey('ArrowRight') || consumeKey('KeyD')) {
+    if (selectedChar !== 'john') sfxJump();
+    selectedChar = 'john';
+  }
+  // Require at least 20 frames (~0.33s) on select screen before confirming
+  // Prevents rapid Enter/Space double-tap from skipping character selection
+  if (selectTimer > 20 && (consumeKey('Enter') || consumeKey('Space'))) {
     player.lives = 3;
     score = 0;
     loadLevel(0);
@@ -936,6 +947,14 @@ function drawSelect() {
     ctx.fillRect(mattX - 70, 100, 140, 300);
   }
   drawPixelArt(mattX - 16, 130, MATT_STAND, 4);
+  // T-shirt name on select screen sprite
+  ctx.fillStyle = BU;
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('MATT', mattX, 130 + 7*4 + 9);
+  ctx.fillText('MATT', mattX + 1, 130 + 7*4 + 9);
+  ctx.fillStyle = '#FFF';
+  ctx.fillText('MATT', mattX + 0.5, 130 + 7*4 + 8);
   ctx.fillStyle = '#FFF';
   ctx.font = 'bold 22px monospace';
   ctx.fillText('MATT', mattX, 230);
@@ -965,6 +984,14 @@ function drawSelect() {
     ctx.fillRect(johnX - 70, 100, 140, 300);
   }
   drawPixelArt(johnX - 16, 130, JOHN_STAND, 4);
+  // T-shirt name on select screen sprite
+  ctx.fillStyle = RD;
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('JOHN', johnX, 130 + 7*4 + 9);
+  ctx.fillText('JOHN', johnX + 1, 130 + 7*4 + 9);
+  ctx.fillStyle = '#FFF';
+  ctx.fillText('JOHN', johnX + 0.5, 130 + 7*4 + 8);
   ctx.fillStyle = '#FFF';
   ctx.font = 'bold 22px monospace';
   ctx.fillText('JOHN', johnX, 230);
@@ -985,9 +1012,16 @@ function drawSelect() {
   ctx.font = '14px monospace';
   ctx.fillText('"I trained them well." — Danny DeVito', W/2, 530);
 
-  ctx.fillStyle = '#666';
+  ctx.fillStyle = selectTimer > 20 ? '#FFF' : '#444';
   ctx.font = '13px monospace';
   ctx.fillText('← → TO SELECT  |  ENTER TO BEGIN', W/2, 570);
+
+  // Selection arrow indicator
+  const selX = selectedChar === 'matt' ? mattX : johnX;
+  const bounce = Math.sin(selectTimer * 0.1) * 4;
+  ctx.fillStyle = '#FF0';
+  ctx.font = 'bold 24px monospace';
+  ctx.fillText('▼', selX, 110 + bounce);
 }
 
 // ========================================
@@ -1091,15 +1125,29 @@ function updateGame() {
     if (player.vy < -3) player.vy = -3;
   }
 
-  // Jetpack
+  // Jetpack (janky Zombocom tech - sputters and wobbles)
   if (player.jetpack > 0) {
     if (keys['Space'] || keys['ArrowUp'] || keys['KeyW']) {
-      player.vy = Math.max(player.vy - 0.8, -5);
-      if (Math.random() > 0.4) {
-        spawnParticles(player.x + player.w/2, player.y + player.h, '#F90', 1);
+      // Janky sputtering: randomly loses thrust for a frame
+      const sputtering = player.jetpack < 80 && Math.random() > 0.7;
+      if (sputtering) {
+        // Sputter! Brief thrust loss
+        player.vy = Math.min(player.vy + 0.3, 2);
+        spawnParticles(player.x + player.w/2, player.y + player.h, '#888', 2);
+        if (Math.random() > 0.6) beep(50 + Math.random() * 80, 0.03, 0.04, 'sawtooth');
+      } else {
+        player.vy = Math.max(player.vy - 0.8, -5);
+        // Wobble side-to-side slightly
+        player.vx += (Math.random() - 0.5) * 0.4;
+      }
+      if (Math.random() > 0.3) {
+        const fcolor = sputtering ? '#888' : (Math.random() > 0.5 ? '#F90' : '#FF0');
+        spawnParticles(player.x + player.w/2 + (Math.random()-0.5)*4, player.y + player.h, fcolor, 1);
       }
     }
     player.jetpack--;
+    // Warning when fuel low
+    if (player.jetpack === 80) addFloatingText(player.x, player.y - 15, 'Fuel low! Sputtering!', '#FA0');
     if (player.jetpack <= 0) addFloatingText(player.x, player.y, 'Zombocom Boost Empty!', '#F90');
   }
 
@@ -1329,7 +1377,7 @@ function updateGame() {
     if (player.invincible <= 0 && !player.dead &&
         Math.abs(p.x - player.x - player.w/2) < 10 &&
         Math.abs(p.y - player.y - player.h/2) < 12) {
-      player.hp -= p.type === 'gatorade' ? 12 : 8;
+      player.hp -= p.type === 'gatorade' ? 12 : p.type === 'feather' ? 6 : 8;
       player.invincible = 30;
       p.life = 0;
       sfxHit();
@@ -1385,8 +1433,21 @@ function updateGame() {
         item.collected = true;
         sfxHeal();
         addFloatingText(item.x, item.y - 5, `+${heal} HP!`, '#0F0');
-        spawnParticles(item.x + item.w/2, item.y, '#0F0', 10);
-        maybeQuip("All hail the Chili's!");
+        addFloatingText(item.x, item.y - 25, "Welcome to Chili's!", '#F44');
+        // Chili's healing particle burst - red and green like their branding
+        spawnParticles(item.x + item.w/2, item.y, '#0F0', 8);
+        spawnParticles(item.x + item.w/2, item.y, '#F44', 8);
+        spawnParticles(item.x + item.w/2, item.y, '#FFF', 4);
+        // Brief invincibility from the healing power of Chili's
+        if (player.invincible < 30) player.invincible = 30;
+        const chilisQuips = [
+          "All hail the Chili's!",
+          "Try the Presidente Margarita!",
+          "Baby back ribs heal all wounds!",
+          "I want my baby back baby back...",
+          "Where's the nearest Chili's? HERE!",
+        ];
+        maybeQuip(chilisQuips[Math.floor(Math.random() * chilisQuips.length)]);
         score += 25;
         keys['KeyX'] = false; keys['KeyL'] = false;
       }
@@ -1474,14 +1535,29 @@ function updateBoss() {
     boss.facing = boss.vx > 0 ? 1 : -1;
     resolvePhysics(boss);
 
+    // Mrs. Palmeri quips
+    if (!boss.quoteTimer) boss.quoteTimer = 180;
+    boss.quoteTimer--;
+    if (boss.quoteTimer <= 0) {
+      const pQuips = boss.phase === 'marge'
+        ? ['BAWK BAWK BAWK!', 'LARGE MARGE HUNGRY!', 'MY CHICKENS WILL PECK YOU APART!', 'YOU MESSED WITH THE WRONG FARM!']
+        : ['GET OFF MY FARM!', 'MY CHICKENS ARE RESTLESS!', 'YOU BOYS RUINED MY FENCE!', 'LARGE MARGE DOESN\'T LIKE VISITORS!'];
+      addFloatingText(boss.x, boss.y - 30, pQuips[Math.floor(Math.random() * pQuips.length)], '#FA0');
+      boss.quoteTimer = 150 + Math.random() * 120;
+    }
+
     // Phase transition at half health: becomes Large Marge
     if (boss.hp < boss.maxHp / 2 && boss.phase === 'palmeri') {
       boss.phase = 'marge';
       boss.vx *= 1.8;
-      addFloatingText(boss.x, boss.y - 20, 'LARGE MARGE AWAKENS!', '#F00');
-      shakeTimer = 20;
-      shakeIntensity = 5;
-      spawnParticles(boss.x + boss.w/2, boss.y, '#F90', 20);
+      boss.w = 40; boss.h = 40;
+      addFloatingText(boss.x, boss.y - 30, 'LARGE MARGE AWAKENS!', '#F00');
+      addFloatingText(boss.x, boss.y - 50, 'THE GIANT CHICKEN RISES!', '#FA0');
+      shakeTimer = 30;
+      shakeIntensity = 8;
+      spawnParticles(boss.x + boss.w/2, boss.y, '#F90', 30);
+      spawnParticles(boss.x + boss.w/2, boss.y, '#FFF', 20);
+      beep(80, 0.4, 0.15); setTimeout(() => beep(60, 0.5, 0.15), 200);
     }
 
     // Spawn egg minions
@@ -1492,15 +1568,34 @@ function updateBoss() {
       addFloatingText(boss.x, boss.y - 20, 'BAWK!', '#FF0');
     }
 
+    // Large Marge feather barrage attack
+    if (boss.phase === 'marge') {
+      if (!boss.featherTimer) boss.featherTimer = 80;
+      boss.featherTimer--;
+      if (boss.featherTimer <= 0) {
+        for (let i = 0; i < 3; i++) {
+          const angle = -Math.PI/2 + (i - 1) * 0.4;
+          projectiles.push({
+            x: boss.x + boss.w/2, y: boss.y + 10,
+            vx: Math.cos(angle) * 3.5, vy: Math.sin(angle) * 3.5,
+            life: 90, color: '#FFF', size: 3, type: 'feather',
+          });
+        }
+        spawnParticles(boss.x + boss.w/2, boss.y + 10, '#FFF', 4);
+        boss.featherTimer = 50 + Math.random() * 40;
+      }
+    }
+
     // Contact damage
     if (player.invincible <= 0 && !player.dead && aabb(player, boss)) {
-      player.hp -= 15;
+      const dmg = boss.phase === 'marge' ? 20 : 15;
+      player.hp -= dmg;
       player.invincible = 60;
       player.vy = -6;
       player.vx = (player.x < boss.x ? -5 : 5);
       sfxHit();
       shakeTimer = 8;
-      shakeIntensity = 5;
+      shakeIntensity = boss.phase === 'marge' ? 7 : 5;
       if (player.hp <= 0) { player.dead = true; deathTimer = 0; sfxDeath(); }
     }
   }
@@ -1986,11 +2081,23 @@ function drawGame() {
       ctx.stroke();
     }
 
-    // Name label on t-shirt (drawn over sprite)
-    ctx.fillStyle = '#FFF';
-    ctx.font = 'bold 6px monospace';
+    // T-shirt name label (screen-printed style)
+    const shirtName = selectedChar === 'matt' ? 'MATT' : 'JOHN';
+    const shirtColor = selectedChar === 'matt' ? BU : RD;
+    ctx.font = 'bold 7px monospace';
+    const tw = ctx.measureText(shirtName).width;
     ctx.textAlign = 'center';
-    ctx.fillText(selectedChar === 'matt' ? 'MATT' : 'JOHN', player.x + player.w/2, player.y + 16);
+    // Dark outline for contrast
+    ctx.fillStyle = shirtColor;
+    const nx = player.x + player.w/2;
+    const ny = player.y + 15;
+    ctx.fillText(shirtName, nx - 0.5, ny);
+    ctx.fillText(shirtName, nx + 0.5, ny);
+    ctx.fillText(shirtName, nx, ny - 0.5);
+    ctx.fillText(shirtName, nx, ny + 0.5);
+    // White text on top
+    ctx.fillStyle = '#FFF';
+    ctx.fillText(shirtName, nx, ny);
 
     // Jetpack backpack (Zombocom Boost)
     if (player.jetpack > 0) {
@@ -2071,8 +2178,8 @@ function drawGame() {
   if (quipTimer > 0 && !player.dead) {
     const qx = player.x + player.w/2;
     const qy = player.y - 35;
-    const qw = ctx.measureText(currentQuip).width + 16;
     ctx.font = '12px monospace';
+    const qw = ctx.measureText(currentQuip).width + 16;
     // Bubble background
     ctx.fillStyle = 'rgba(0,0,0,0.8)';
     const rx = qx - qw/2;
@@ -2246,9 +2353,14 @@ function drawGameOver() {
     ctx.fillText('PRESS ENTER TO TRY AGAIN', W/2, H/2 + 140);
   }
 
+}
+
+function updateGameOver() {
+  gameTime++;
   if (consumeKey('Enter') || consumeKey('Space')) {
     score = 0;
     player.lives = 3;
+    selectTimer = 0;
     gameState = GS.SELECT;
   }
 }
@@ -2258,7 +2370,6 @@ function drawGameOver() {
 // ========================================
 let winTimer = 0;
 function drawWin() {
-  winTimer++;
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
 
@@ -2337,6 +2448,10 @@ function drawWin() {
     ctx.fillText('PRESS ENTER TO PLAY AGAIN', W/2, 560);
   }
 
+}
+
+function updateWin() {
+  winTimer++;
   if (winTimer > 60 && (consumeKey('Enter') || consumeKey('Space'))) {
     score = 0;
     winTimer = 0;
@@ -2356,6 +2471,8 @@ function update() {
     case GS.PLAYING:
     case GS.BOSS: updateGame(); break;
     case GS.BONUS: updateBonus(); break;
+    case GS.GAMEOVER: updateGameOver(); break;
+    case GS.WIN: updateWin(); break;
   }
   // Clear justPressed at end of frame
   for (const k in justPressed) justPressed[k] = false;
